@@ -1,11 +1,12 @@
 # OKClip — Task Tracker
 
 ## Phase 1: Foundation
+- [x] `done` Create AGENTS.md, PLAN.md, TASKS.md
 - [ ] `pending` Initialize project structure (directories, package.json, tsconfig)
 - [ ] `pending` Setup Express server with basic health endpoint
 - [ ] `pending` Setup environment config (Sumopod, Whisper keys)
 - [ ] `pending` Create TypeScript types (task, clip, transcript, delivery)
-- [ ] `pending` Create AGENTS.md, PLAN.md, TASKS.md
+- [ ] `pending` Implement job queue (in-memory, single-worker)
 
 ## Phase 2: Video Processing — Core
 - [ ] `pending` Integrate yt-dlp for video downloading (720p)
