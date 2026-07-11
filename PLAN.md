@@ -106,7 +106,74 @@ Total: ~1-5 minutes per task.
 - Max 5 clips per task
 - Requires yt-dlp & FFmpeg on server
 
+## Technical Moats
+
+### Clip Intelligence (Core Moat)
+
+**Hook Detection**
+First 3 seconds make or break. Not just keyword matching — detect the most attention-grabbing opener:
+- Word-level Whisper timestamps → high-emotion words as clip entry point
+- FFmpeg audio amplitude analysis → volume spikes (excitement, laugh, gasp)
+- FFmpeg scene change detection → visual cut points
+
+**Sentence-Boundary Clipping**
+Never cut mid-word. Whisper word-level timestamps ensure every clip starts/ends at complete sentence boundaries.
+
+**Speaker-Aware Moments**
+Understand conversation dynamics, not just keywords:
+- "Clip when guest answers the host's question"
+- "Clip the debate moment — host interrupts guest"
+- "Clip the reveal / plot twist"
+
+**Visual Change Detection**
+Transcript alone isn't enough. FFmpeg scene detection for:
+- "Clip when the slide changes" (presentation/tutorial)
+- "Clip when the demo starts" (coding/product video)
+- "Clip when there's a visual punchline"
+
+**Clip Narrative Chain**
+N clips aren't random — they tell a story:
+- Clip 1: problem intro
+- Clip 2: deep dive
+- Clip 3: twist / insight
+- Clip 4: solution
+- Clip 5: punchline
+
+**Auto Caption + Hashtag**
+Clip comes with AI-generated caption, hashtags, and suggested posting time. End-to-end content pipeline.
+
+### Data Moat
+
+**Style Memory**
+OKClip learns from history. Each agent has a preference profile auto-tuned over time:
+```
+Agent preferences:
+  aspectRatio: 9:16     (auto-detected from history)
+  subtitleStyle: bold   (auto-detected)
+  maxDuration: 30s      (auto-detected)
+  promptPatterns: ["tutorial","explain"] (inferred)
+```
+
+Storage: `data/preferences/<agentId>.json` per agent.
+
+Why it's a moat:
+- Switching competitor = losing all preference history
+- More usage = more accurate = higher switching cost
+- Aggregated data improves default model for everyone
+
+### Moat Hierarchy
+
+| Tier | Feature | Status |
+|------|---------|--------|
+| 🔒 Hardest | Style memory (data moat) | Needs user base |
+| 🔒 Hard | Sentence-boundary + speaker-aware | Whisper word-level |
+| 🔒 Hard | Clip narrative chain | Prompt engineering |
+| 🔒 Medium | Hook detection (audio/visual) | FFmpeg + Whisper |
+| 🔒 Medium | Visual change detection | FFmpeg scene detect |
+| 🟡 Easy | Auto hashtag + caption | LLM trivial |
+
 ## Success Metrics
 - Agent-native differentiator: no existing AI clip tool has A2A integration
 - Composable: other agents can call OKClip as part of larger workflows
 - Viral-ready output: clips come with subtitles, thumbnails, and viral scores
+- Data moat: style memory locks in repeat users

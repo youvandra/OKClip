@@ -17,10 +17,21 @@
 
 ## Phase 3: Video Processing — Polish
 - [ ] `pending` Auto-subtitles — burn Whisper transcript into video overlay
-- [ ] `pending` Speaker labeling — "Host:", "Guest:" in subtitles
+- [ ] `pending` Speaker labeling — "Host:", "Guest:" in subtitles (diarization)
 - [ ] `pending` AI thumbnail — best frame extraction + overlay text per clip
 - [ ] `pending` Viral score — LLM rates clip 0-100 for viral potential
 - [ ] `pending` Multi-clip support — N clips from 1 video
+- [ ] `pending` Sentence-boundary clipping — never cut mid-word
+- [ ] `pending` Speaker-aware moments — understand conversation dynamics
+- [ ] `pending` Hook detection — audio amplitude + scene change for best opener
+- [ ] `pending` Visual change detection — FFmpeg scene detect for slides/demos
+- [ ] `pending` Clip narrative chain — N clips flow as a story
+- [ ] `pending` Auto caption + hashtag — LLM generate posting metadata
+
+## Phase 4: Data Moat
+- [ ] `pending` Style memory — per-agent preference profiling
+- [ ] `pending` Preference auto-tuning from request history
+- [ ] `pending` Storage: data/preferences/<agentId>.json
 
 ## Phase 4: Storage & Delivery
 - [ ] `pending` Set up temp storage (/tmp/okclip/)
