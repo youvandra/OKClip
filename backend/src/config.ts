@@ -15,6 +15,10 @@ const envSchema = z.object({
 
   DEEPGRAM_API_KEY: z.string().optional(),
 
+  // Path to a Netscape-format cookies.txt so yt-dlp can pass YouTube's
+  // datacenter-IP bot check. Without it, downloads from a VPS are blocked.
+  YTDLP_COOKIES: z.string().optional(),
+
   SUMOPOD_API_KEY: z.string().optional(),
   SUMOPOD_BASE_URL: z.string().url().default("https://ai.sumopod.com/v1"),
   SUMOPOD_MODEL: z.string().default("deepseek-v4-flash"),

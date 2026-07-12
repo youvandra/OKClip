@@ -1,6 +1,18 @@
 import { join } from "node:path";
+import { config } from "./config.js";
 import { run } from "./exec.js";
 import { logger } from "./logger.js";
+
+/**
+ * Common yt-dlp flags. Injects `--cookies` when configured so downloads work
+ * from a datacenter IP (YouTube otherwise returns a "confirm you're not a bot"
+ * error). Returns a fresh array each call.
+ */
+function ytdlpBase(): string[] {
+  const base = ["--no-warnings"];
+  if (config.YTDLP_COOKIES) base.push("--cookies", config.YTDLP_COOKIES);
+  return base;
+}
 
 export interface VideoMeta {
   id: string;
@@ -87,7 +99,7 @@ export function parsePlaylist(stdout: string): PlaylistEntry[] {
 export async function probePlaylist(url: string): Promise<PlaylistEntry[]> {
   const res = await run(
     "yt-dlp",
-    ["--flat-playlist", "--dump-json", "--no-warnings", url],
+    [...ytdlpBase(), "--flat-playlist", "--dump-json", url],
     { timeoutMs: 60_000 },
   );
   if (res.code !== 0) {
@@ -100,7 +112,7 @@ export async function probePlaylist(url: string): Promise<PlaylistEntry[]> {
 export async function probe(url: string): Promise<VideoMeta> {
   const res = await run(
     "yt-dlp",
-    ["--dump-json", "--no-warnings", "--no-playlist", url],
+    [...ytdlpBase(), "--dump-json", "--no-playlist", url],
     { timeoutMs: 60_000 },
   );
   if (res.code !== 0) {
@@ -118,12 +130,12 @@ export async function download(url: string, destDir: string): Promise<string> {
   const res = await run(
     "yt-dlp",
     [
+      ...ytdlpBase(),
       "-f",
       "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]/b",
       "--merge-output-format",
       "mp4",
       "--no-playlist",
-      "--no-warnings",
       "-o",
       out,
       "--print",
