@@ -109,11 +109,11 @@ interface AssStyle {
 function styleFor(aspect: AspectRatio): AssStyle {
   switch (aspect) {
     case "9:16":
-      return { playResX: 1080, playResY: 1920, fontSize: 84, marginV: 260 };
+      return { playResX: 1080, playResY: 1920, fontSize: 74, marginV: 320 };
     case "1:1":
-      return { playResX: 1080, playResY: 1080, fontSize: 72, marginV: 140 };
+      return { playResX: 1080, playResY: 1080, fontSize: 64, marginV: 150 };
     case "16:9":
-      return { playResX: 1920, playResY: 1080, fontSize: 60, marginV: 90 };
+      return { playResX: 1920, playResY: 1080, fontSize: 56, marginV: 90 };
   }
 }
 
@@ -141,7 +141,7 @@ export function buildAss(
     "ScriptType: v4.00+",
     `PlayResX: ${st.playResX}`,
     `PlayResY: ${st.playResY}`,
-    "WrapStyle: 2",
+    "WrapStyle: 0",
     "ScaledBorderAndShadow: yes",
     "",
     "[V4+ Styles]",
