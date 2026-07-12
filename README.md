@@ -1,86 +1,111 @@
 # OKClip
 
-**An A2A Agent Service Provider on OKX.AI that turns a YouTube URL + a brief
-into decision-grade video clips.** A requesting agent sends a video and a
-natural-language brief; OKClip negotiates scope and price, finds the best
+**An A2A Agent Service Provider on OKX.AI that turns a YouTube URL + a
+natural-language brief into decision-grade video clips.** A requesting agent
+sends a video and a brief; OKClip negotiates scope and price, finds the best
 moments, cuts them with burned-in speaker-labeled subtitles, and returns
 **structured clip metadata the agent can approve** — every clip carrying a viral
 score, a confidence, and the *reasons it was picked*.
 
 Built for the OKX.AI Genesis Hackathon. Sibling project to
-[txwrap](https://github.com/youvandra/txwrap).
+[WalletLens](https://github.com/youvandra/WalletLens).
 
 | | |
 |---|---|
 | **Type** | A2A (Agent-to-Agent) — negotiated, escrow-settled on X Layer |
+| **OKX.AI Agent ID** | `#5189` |
 | **Protocol** | OKX onchainos agent (CLI + XMTP state machine); escrow is gas-free via the platform paymaster |
 | **Work engine** | this repo — invoked by the ASP agent on `job_accepted` |
 | **Human surface** | `/` — Alpine + Tailwind SPA |
-| **Pricing** | clip-count tier + source-length surcharge (see below) |
+| **Stack** | Node 20 · TypeScript · Express 5 · Deepgram · Sumopod LLM · yt-dlp · FFmpeg |
 
 ---
 
-## Why A2A, not a clip SaaS
+## Why OKClip
 
-Clipping a video is a commodity. What makes OKClip decision-grade:
+Clipping a video is a commodity — Whisper/Deepgram + an LLM + FFmpeg, and every
+SaaS tool already does it. OKClip is different in two ways that matter to an
+autonomous agent:
 
-- **Negotiation, not a fixed call.** OKClip infers the platform/aspect from the
-  brief, prices the job transparently, states its assumptions, and declines
-  out-of-scope work — the A2A judgment layer.
-- **Evidence per clip.** Every moment ships `reasons` (topic match, laughter
-  spike, question→answer, sentence-boundary), a `confidence`, and an `evidence`
-  block. The requesting agent approves on data, not a black-box score.
-- **Revision loop.** Reject a clip with feedback; OKClip re-cuts just that
-  moment from the cached transcript (no re-download, no re-ASR).
-- **Style memory.** Per-agent preferences (aspect, length, topics) are inferred
-  from history and auto-fill future briefs — a switching-cost data moat.
+- **It's agent-native, not a web app.** Other agents compose OKClip into
+  workflows: *find a trending video → OKClip → 3 posted clips*. No competitor
+  offers an A2A interface.
+- **Its output is decision-grade, not a black box.** Every clip ships the
+  *reasons* it was picked (topic match, laughter/scene-cut hook, question→answer
+  exchange, sentence-boundary), a `confidence`, and an `evidence` block. The
+  requesting agent approves on structured data — it never has to watch the video.
 
-Full strategy in [docs/VISION.md](docs/VISION.md).
+Plus the things a serious clip tool needs: **negotiation** (infer platform/aspect,
+price transparently, decline out-of-scope), a **revision loop** (reject a clip
+with feedback; OKClip re-cuts just that moment from the cached transcript), and
+**per-agent style memory** that learns aspect ratio, clip length, and topics from
+history.
 
 ---
 
 ## How A2A works here
 
 OKX A2A is **not** an HTTP endpoint — it is an agent process driven by the
-`onchainos agent` CLI over XMTP, with escrow funded on the platform (gas-free).
-The ASP agent negotiates, applies, and on `job_accepted` runs OKClip as its work
-engine, then delivers the clips over XMTP.
+`onchainos agent` CLI over XMTP, with escrow funded and released on the platform
+(gas-free). The ASP agent negotiates, applies, and — only once the job is
+accepted and escrow is funded — runs OKClip as its **work engine**, then delivers
+the clips over XMTP.
 
-Two ways to invoke the engine:
+```
+user publishes task
+  -> job_created           ASP agent: apply (on-chain, gas-free)        [OKX CLI]
+  -> user confirm-accept
+  -> job_accepted          escrow funded; NOW do the work               [OKX event]
+       run the engine:  okclip run --url <yt> --prompt "<brief>" --clips <n>
+       -> clip files + metadata + summary
+  -> deliver               attach clips + send summary over XMTP        [OKX CLI]
+  -> user confirms         payment released                             [OKX]
+```
 
-**CLI** (what the ASP agent shells out to):
-```
-okclip run --url <yt> --prompt "3 DeFi clips" --clips 3 [--aspect 9:16]
-# -> JSON deliverable: metadata + absolute clip file paths + an XMTP-ready summary
+### Invoking the engine
+
+**CLI** — what the ASP agent shells out to:
+
+```bash
+okclip run --url "https://youtu.be/…" --prompt "3 DeFi clips for tiktok" --clips 3
+# stdout: JSON { ok, jobId, price, summary, delivery, clipFiles[], workDir }
 ```
 
-**Internal HTTP API** (the frontend + local callers):
-```
-POST /api/negotiate   { agentId, brief }        -> proposal | clarify | decline
-POST /api/jobs        { agentId, brief, terms } -> { jobId }
-GET  /api/jobs/:id                              -> delivery (poll)
-POST /api/jobs/:id/revise { rejections[] }      -> re-clips rejected moments
-GET  /clips/:jobId/:file                        -> the produced mp4 / thumbnail
-```
+`clipFiles[]` are absolute paths to attach; `summary` is an XMTP-ready text block.
+
+**Internal HTTP API** — used by the frontend and local callers:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/negotiate` | `{ agentId, brief }` → `proposal \| clarify \| decline` (probes source, applies style memory) |
+| `POST` | `/api/jobs` | `{ agentId, brief, terms }` → `{ jobId }` (enqueues the job) |
+| `GET` | `/api/jobs/:id` | poll the delivery |
+| `POST` | `/api/jobs/:id/revise` | `{ rejections[] }` → re-clips rejected moments (async) |
+| `GET` | `/clips/:jobId/:file` | the produced mp4 / thumbnail (path-traversal safe) |
+| `GET` | `/health` | liveness + feature flags |
 
 A `brief` is `{ url, prompt, clipCount (1–5), aspectRatio?, maxClipSeconds?, language? }`.
-Each delivered clip:
+
+### Delivery shape (per clip)
 
 ```jsonc
 {
   "downloadUrl": "/clips/<job>/clip-1.mp4",
   "thumbnailUrl": "/clips/<job>/clip-1.jpg",
   "viralScore": 87,            // heuristic, capped at 95 — never certainty
-  "confidence": 0.82,
+  "confidence": 0.82,          // how well the moment matches the brief
   "durationSec": 47,
   "timestamp": { "startSec": 272, "endSec": 319 },
-  "transcriptSnippet": "...",
+  "transcriptSnippet": "…",
   "speakers": ["Host", "Guest 1"],
   "reasons": ["topic match: DeFi", "question -> answer exchange", "opens on a scene cut"],
-  "caption": "...", "hashtags": ["#DeFi"],
-  "evidence": { "sourceDurationSec": 3720, "analyzedSegments": 214, "asr": "deepgram-nova-2", "caveat": "..." }
+  "caption": "…", "hashtags": ["#DeFi"],
+  "evidence": { "sourceDurationSec": 3720, "analyzedSegments": 214, "asr": "deepgram-nova-2", "caveat": "…" }
 }
 ```
+
+The delivery also carries scored **runner-up** moments (candidates not clipped),
+so an agent can swap a pick without a full re-process.
 
 ---
 
@@ -93,12 +118,16 @@ yt-dlp download (720p) -> Deepgram transcribe + word-level + diarize
   -> thumbnail -> decision-grade delivery
 ```
 
-The metrics/selection are deterministic where possible; the LLM writes the
-selection and captions. Scene detection degrades gracefully.
+Deterministic where possible; the LLM only writes the selection and captions.
+Scene detection degrades gracefully. Clips start/end on complete sentences
+(word-level timestamps), never mid-word.
 
 ---
 
 ## Pricing
+
+Transcription cost scales with **source length** and is paid once per task, not
+per clip — so price is a clip-count tier plus a length surcharge.
 
 | Clips | Base (source ≤ 30 min) |
 |-------|------------------------|
@@ -106,33 +135,43 @@ selection and captions. Scene detection degrades gracefully.
 | 3 | 1 USDT |
 | 5 | 1.5 USDT |
 
-**+0.5 USDT per extra 30-minute block** of source (transcription cost scales
-with length, and is paid once per task, not per clip).
+**+0.5 USDT per additional 30-minute block** of source. Quoted up front during
+negotiation.
 
 ---
 
-## Run locally
+## Quick start (local)
 
 ### Prerequisites
-Node.js 20+, `yt-dlp` and `ffmpeg` on PATH, a Deepgram API key, a Sumopod
-(OpenAI-compatible) API key.
+
+- **Node.js 20+**
+- **`yt-dlp`** and **`ffmpeg`** on `PATH`
+- A **Deepgram** API key and a **Sumopod** (OpenAI-compatible) API key
 
 ```bash
 # macOS
 brew install yt-dlp ffmpeg
 ```
 
-### Start
+### Run
+
 ```bash
 cd backend
 npm install
-cp .env.example .env     # fill in DEEPGRAM_API_KEY + SUMOPOD_API_KEY
-npm run dev              # http://localhost:3001
+cp .env.example .env         # fill in DEEPGRAM_API_KEY + SUMOPOD_API_KEY
+npm run dev                  # http://localhost:3001
 ```
 
-Open `http://localhost:3001` for the SPA, or POST to `/a2a/*` as an agent.
+Open `http://localhost:3001` for the SPA, POST to `/api/*` as an agent, or run
+the engine directly:
+
+```bash
+npm run build
+node dist/cli.js run --url "https://youtu.be/…" --prompt "best moments" --clips 1
+```
 
 ### Scripts
+
 ```bash
 npm run dev        # tsx watch
 npm run build      # tsc -> dist/
@@ -141,13 +180,46 @@ npm test           # node:test suite (hermetic, no network)
 npm run typecheck  # tsc --noEmit
 ```
 
+The test suite is hermetic (no network): it covers the pure logic — pricing,
+aspect inference, sentence-boundary snapping, score clamping, SRT/ffmpeg arg
+building, playlist parsing, and the A2A job adapter.
+
 ---
 
 ## Configuration
 
-See [docs/STACK.md](docs/STACK.md) for the full env table. Required for real
-runs: `DEEPGRAM_API_KEY`, `SUMOPOD_API_KEY`. The server boots without them
-(features report disabled) so `/health` and discovery always work.
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `PORT` | no | `3001` | HTTP port |
+| `NODE_ENV` | no | `development` | Environment |
+| `DEEPGRAM_API_KEY` | for ASR | — | Transcription + word timings + diarization |
+| `SUMOPOD_API_KEY` | for analysis | — | LLM moment selection / scoring / captions |
+| `SUMOPOD_BASE_URL` | no | `https://ai.sumopod.com/v1` | OpenAI-compatible base URL |
+| `SUMOPOD_MODEL` | no | `deepseek-v4-flash` | Model id |
+| `YTDLP_COOKIES` | on a VPS | — | Path to a `cookies.txt`; see below |
+| `STORAGE_DIR` | no | `/tmp/okclip` | Temp clip storage |
+| `PREFERENCES_DIR` | no | `data/preferences` | Persistent per-agent style memory |
+| `CLIP_TTL_MS` | no | `86400000` | Clip retention before cleanup (24 h) |
+| `MAX_SOURCE_SECONDS` | no | `7200` | Product cap on source length (2 h) |
+
+The server boots without the API keys — `/health` reports which features are
+enabled — so discovery and negotiation always work.
+
+### Downloading YouTube from a server
+
+From a datacenter IP, YouTube blocks yt-dlp unless it's authenticated and can
+solve its challenges. Running on a VPS therefore needs three pieces together:
+
+1. **Cookies** — a Netscape `cookies.txt` from a logged-in session, referenced by
+   `YTDLP_COOKIES` (passes the "confirm you're not a bot" gate). Cookies expire —
+   refresh them when downloads start failing.
+2. **A PO-token provider** — the [bgutil](https://github.com/Brainicism/bgutil-ytdlp-pot-provider)
+   provider + its yt-dlp plugin (supplies the GVS PO token YouTube now requires).
+3. **A JS runtime** — [Deno](https://deno.com) + the `yt-dlp-ejs` package to solve
+   the `n` signature challenge (Node is not supported by yt-dlp's EJS).
+
+On a normal desktop with a logged-in browser, `yt-dlp` usually handles this
+automatically; the three-piece setup is specific to headless servers.
 
 ---
 
@@ -162,35 +234,55 @@ backend/src/
   jobs.ts         internal work API (negotiate / jobs / revise)
   negotiation.ts  pricing, aspect inference, decline/clarify
   pipeline.ts     download -> transcribe -> analyze -> clip orchestration
-  downloader.ts   yt-dlp (probe, download, playlist)
-  transcriber.ts  Deepgram nova-2 (transcript + diarization)
+  downloader.ts   yt-dlp (probe, download, playlist) + cookie support
+  transcriber.ts  Deepgram nova-2 (transcript + word-level + diarization)
   analyzer.ts     LLM moment selection, scoring, sentence-boundary snapping
   clipper.ts      ffmpeg cut + aspect crop + subtitle burn
   subtitles.ts    speaker-labeled SRT from word timings
   thumbnail.ts    frame extraction
   hooks.ts        scene detection + hook refine
   stitch.ts       highlight-reel concat
-  memory.ts       per-agent style memory (data moat)
+  memory.ts       per-agent style memory (the data moat)
   storage.ts      safe clip serving + TTL cleanup
   queue.ts        in-memory single-worker job queue
   delivery.ts     decision-grade delivery envelope
   config.ts types.ts logger.ts exec.ts
 frontend/
-  index.html      Alpine + Tailwind SPA (no build)
-docs/
-  VISION.md STACK.md ASP_REGISTRATION.md SUBMISSION.md
+  index.html      Alpine + Tailwind SPA (no build step)
 ```
 
 ---
 
 ## Deployment
 
-pm2 + nginx on a VPS (same pattern as txwrap). See
-[docs/SUBMISSION.md](docs/SUBMISSION.md) for registration and submission steps,
-[ecosystem.config.cjs](ecosystem.config.cjs) and
-[deploy/nginx.conf.example](deploy/nginx.conf.example) for the process/proxy
-config.
+Node backend under **pm2** behind **nginx** (TLS via Let's Encrypt) on a VPS.
+See `ecosystem.config.cjs` (single instance — the queue and style memory are
+in-process). Install `yt-dlp` + `ffmpeg` and the YouTube download stack above,
+then set the API keys in `backend/.env`.
+
+---
+
+## Honesty rules
+
+Deliberate constraints, not omissions:
+
+- **Viral score is capped at 95.** A transcript heuristic never justifies
+  certainty.
+- **Evidence travels with every clip** — source length, segments analyzed, ASR
+  used, and an explicit caveat.
+- **Reasons are real signals** — topic-match, audio/scene hooks, boundary
+  quality, conversational structure — not decoration.
+- **Prices reflect real cost** — the length surcharge tracks the ASR cost that
+  actually scales.
+
+---
 
 ## Submission
 
-OKX.AI Genesis Hackathon. Deadline **Jul 17, 2026 23:59 UTC**.
+Built for the OKX.AI Genesis Hackathon. Registered as an A2A ASP,
+**Agent ID #5189**. Deadline: **Jul 17, 2026 23:59 UTC**.
+```
+
+## License
+
+MIT
