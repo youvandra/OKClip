@@ -1,13 +1,15 @@
 import express from "express";
 import { config, features } from "./config.js";
 import { logger } from "./logger.js";
+import { runPipeline } from "./pipeline.js";
 import { JobQueue } from "./queue.js";
-import type { ClipJob } from "./types.js";
 
-// Placeholder processor — the real pipeline (download -> transcribe -> analyze
-// -> clip -> deliver) is wired in later phases.
-const queue = new JobQueue(async (job: ClipJob) => {
-  queue.setStatus(job.id, "done");
+// The worker runs the full clip pipeline for each job, reporting progress
+// through the queue's status setter.
+const queue = new JobQueue(async (job) => {
+  await runPipeline(job, {
+    setStatus: (status, patch) => queue.setStatus(job.id, status, patch),
+  });
 });
 
 const app = express();

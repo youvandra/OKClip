@@ -79,6 +79,22 @@ export interface ClipResult {
   evidence: ClipEvidence;
 }
 
+/**
+ * A moment chosen by the analyzer, before it is cut into a file. Timestamps are
+ * already snapped to sentence boundaries.
+ */
+export interface SelectedMoment {
+  startSec: number;
+  endSec: number;
+  viralScore: number; // 0..95
+  confidence: number; // 0..1
+  reasons: string[];
+  transcriptSnippet: string;
+  speakers: string[];
+  caption: string;
+  hashtags: string[];
+}
+
 /** A candidate moment that was scored but not clipped. */
 export interface RunnerUpMoment {
   timestamp: { startSec: number; endSec: number };

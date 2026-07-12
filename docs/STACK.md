@@ -13,7 +13,7 @@ world (Node/TypeScript) and the txwrap precedent (which shipped and passed revie
 | Video download | **yt-dlp** (invoked via `child_process`) | The de-facto most robust YouTube downloader; handles formats/age-gating better than any Node-native lib. |
 | Transcription / ASR | **@deepgram/sdk** (nova-2) | Transcription **+ word-level timestamps + native speaker diarization** in one call, long-audio safe, cheaper than Whisper. Fixes the "Whisper has no diarization + 25 MB cap" problem. |
 | LLM analysis | **openai SDK → Sumopod base URL** | Powerful, ubiquitous client; Sumopod is OpenAI-compatible; same provider txwrap used. Used for moment selection, viral scoring, reasons, captions. |
-| Video processing | **fluent-ffmpeg** + system/static FFmpeg | The most-supported Node FFmpeg wrapper: cut, subtitle burn, reformat, scene detection. |
+| Video processing | **FFmpeg via `child_process`** (raw args) | Direct control over filtergraphs (cut, subtitle burn, aspect crop, scene detection). Dropped fluent-ffmpeg — it is deprecated and adds a layer we do not need since we already spawn processes for yt-dlp. |
 | Subtitles | Build **SRT/ASS** from Deepgram word timings | Full control over sentence-boundary cuts and speaker labels ("Host:" / "Guest:"). |
 | Job queue | **In-memory, single-worker** (MVP) | No Redis for the hackathon; video work is I/O-bound and serialized to avoid bandwidth saturation. Swappable for BullMQ later. |
 | Logging | **pino** | Fast structured logging (AGENTS.md forbids `console.log` in production). |
@@ -28,6 +28,7 @@ world (Node/TypeScript) and the txwrap precedent (which shipped and passed revie
 
 - **Python backend** — video/ML is Python-heavy, but the heavy lifting (Deepgram, FFmpeg, yt-dlp) runs as external APIs/CLIs callable from Node. Staying in Node keeps one language and reuses the OKX/txwrap ecosystem.
 - **Fastify** — faster than Express, but the OKX payment middleware targets Express; alignment beats marginal throughput here.
+- **fluent-ffmpeg** — deprecated ("no longer supported"); we invoke FFmpeg directly via `child_process` for full filtergraph control.
 - **Redis / BullMQ** — overkill for a single-VPS hackathon MVP; the in-memory queue is swappable behind an interface.
 - **Whisper as primary ASR** — no diarization, 25 MB cap. Kept only as a possible fallback.
 

@@ -9,12 +9,12 @@
 - [x] `done` Implement job queue (in-memory, single-worker)
 
 ## Phase 2: Video Processing — Core
-- [ ] `pending` Integrate yt-dlp for video downloading (720p)
-- [ ] `pending` Integrate Deepgram for transcription (word-level timestamps)
-- [ ] `pending` Enable Deepgram speaker diarization (native, not Whisper)
-- [ ] `pending` Build LLM transcript analyzer (find relevant timestamps)
-- [ ] `pending` Integrate FFmpeg for video clipping
-- [ ] `pending` Wire up pipeline: download → transcribe → analyze → clip
+- [x] `done` Integrate yt-dlp for video downloading (720p)
+- [x] `done` Integrate Deepgram for transcription (word-level timestamps)
+- [x] `done` Enable Deepgram speaker diarization (native, not Whisper)
+- [x] `done` Build LLM transcript analyzer (find relevant timestamps)
+- [x] `done` Integrate FFmpeg for video clipping
+- [x] `done` Wire up pipeline: download → transcribe → analyze → clip
 
 ## Phase 3: A2A Core — Negotiation & Decision-Grade Output
 - [ ] `pending` Negotiation: clarify brief (platform, tone, length) via Q&A
@@ -30,7 +30,7 @@
 - [ ] `pending` Best-frame thumbnail — frame extraction + text overlay per clip
 - [ ] `pending` Viral score — LLM rates clip 0–95 with reasons
 - [ ] `pending` Multi-clip support — N clips (up to 5) from 1 video
-- [ ] `pending` Sentence-boundary clipping — never cut mid-word
+- [x] `done` Sentence-boundary clipping — never cut mid-word (snapToSentenceBoundaries)
 - [ ] `pending` Speaker-aware moments — understand conversation dynamics
 - [ ] `pending` Hook detection — audio amplitude + scene change for best opener
 - [ ] `pending` Visual change detection — FFmpeg scene detect for slides/demos
