@@ -4,24 +4,32 @@
 - [x] `done` Create AGENTS.md, PLAN.md, TASKS.md
 - [ ] `pending` Initialize project structure (directories, package.json, tsconfig)
 - [ ] `pending` Setup Express server with basic health endpoint
-- [ ] `pending` Setup environment config (Sumopod, Whisper keys)
-- [ ] `pending` Create TypeScript types (task, clip, transcript, delivery)
+- [ ] `pending` Setup environment config (Sumopod, Deepgram keys)
+- [ ] `pending` Create TypeScript types (task, clip, transcript, delivery, negotiation)
 - [ ] `pending` Implement job queue (in-memory, single-worker)
 
 ## Phase 2: Video Processing — Core
 - [ ] `pending` Integrate yt-dlp for video downloading (720p)
-- [ ] `pending` Integrate Whisper API for transcription (word-level timestamps)
-- [ ] `pending` Integrate Whisper diarization (speaker labeling)
+- [ ] `pending` Integrate Deepgram for transcription (word-level timestamps)
+- [ ] `pending` Enable Deepgram speaker diarization (native, not Whisper)
 - [ ] `pending` Build LLM transcript analyzer (find relevant timestamps)
 - [ ] `pending` Integrate FFmpeg for video clipping
 - [ ] `pending` Wire up pipeline: download → transcribe → analyze → clip
 
-## Phase 3: Video Processing — Polish
-- [ ] `pending` Auto-subtitles — burn Whisper transcript into video overlay
+## Phase 3: A2A Core — Negotiation & Decision-Grade Output
+- [ ] `pending` Negotiation: clarify brief (platform, tone, length) via Q&A
+- [ ] `pending` Negotiation: counter-offer scope/price, decline out-of-scope
+- [ ] `pending` Evidence block — per-clip why-picked reasons + confidence
+- [ ] `pending` Decision-grade delivery — structured metadata agent can approve
+- [ ] `pending` Revision loop — re-clip rejected moments from cached transcript
+- [ ] `pending` Runner-up moments — return candidate timestamps not clipped
+
+## Phase 4: Video Processing — Polish
+- [ ] `pending` Auto-subtitles — burn Deepgram transcript into video overlay
 - [ ] `pending` Speaker labeling — "Host:", "Guest:" in subtitles (diarization)
-- [ ] `pending` AI thumbnail — best frame extraction + overlay text per clip
-- [ ] `pending` Viral score — LLM rates clip 0-100 for viral potential
-- [ ] `pending` Multi-clip support — N clips from 1 video
+- [ ] `pending` Best-frame thumbnail — frame extraction + text overlay per clip
+- [ ] `pending` Viral score — LLM rates clip 0–95 with reasons
+- [ ] `pending` Multi-clip support — N clips (up to 5) from 1 video
 - [ ] `pending` Sentence-boundary clipping — never cut mid-word
 - [ ] `pending` Speaker-aware moments — understand conversation dynamics
 - [ ] `pending` Hook detection — audio amplitude + scene change for best opener
@@ -29,39 +37,41 @@
 - [ ] `pending` Clip narrative chain — N clips flow as a story
 - [ ] `pending` Auto caption + hashtag — LLM generate posting metadata
 
-## Phase 4: Data Moat
+## Phase 5: Data Moat
 - [ ] `pending` Style memory — per-agent preference profiling
 - [ ] `pending` Preference auto-tuning from request history
 - [ ] `pending` Storage: data/preferences/<agentId>.json
 
-## Phase 4: Storage & Delivery
+## Phase 6: Storage & Delivery
 - [ ] `pending` Set up temp storage (/tmp/okclip/)
+- [ ] `pending` Transcript cache for revision window (avoid re-ASR)
 - [ ] `pending` Implement clip upload & download link generation
 - [ ] `pending` Implement auto-cleanup (24 hour TTL)
 - [ ] `pending` Handle file size limits
 
-## Phase 5: A2A Integration
-- [ ] `pending` Implement A2A service registration on OKX.AI
-- [ ] `pending` Build negotiation & pricing logic (1/3/5 clips)
+## Phase 7: A2A Integration
+- [ ] `pending` Implement A2A service registration on OKX.AI (asp, category content)
+- [ ] `pending` Build negotiation & pricing logic (clip tiers + length surcharge)
 - [ ] `pending` Build delivery & approval flow
-- [ ] `pending` Implement escrow payment handling
+- [ ] `pending` Implement escrow payment handling (per OKX A2A rules — verify)
 
-## Phase 6: Frontend
+## Phase 8: Frontend
 - [ ] `pending` Design landing page (Alpine.js + Tailwind — neo-brutalism)
 - [ ] `pending` Build task status UI
-- [ ] `pending` Build clip preview with metadata (viral score, speakers, thumbnail)
+- [ ] `pending` Build clip preview with metadata (viral score, reasons, speakers, thumbnail)
 
-## Phase 7: Expansion (if time)
-- [ ] `pending` Vertical reformat — 16:9 → 9:16 for TikTok/Reels
+## Phase 9: Expansion (if time)
+- [ ] `pending` Vertical reformat — 16:9 → 9:16 with face/subject tracking
 - [ ] `pending` Clip stitching — combine N clips into 1 highlight reel
 - [ ] `pending` Playlist batch — YouTube playlist → process all videos
+- [ ] `pending` Multi-language — auto-detect (Deepgram) → language-aware LLM prompt
 
-## Phase 8: Polish & Deploy
+## Phase 10: Polish & Deploy
 - [ ] `pending` Deploy backend to VPS
 - [ ] `pending` Deploy frontend
 - [ ] `pending` Install yt-dlp & FFmpeg on VPS
 - [ ] `pending` Test full flow end-to-end
-- [ ] `pending` Register ASP on OKX.AI
+- [ ] `pending` Register + list ASP on OKX.AI (A2A)
 - [ ] `pending` Create X post + demo video
 
 ## Discussion Notes (2026-07-11)
@@ -70,3 +80,13 @@
 - Output: downloadable clips with subtitles, thumbnails, viral scores
 - Storage: VPS /tmp (cheapest option for hackathon), 24h TTL
 - Naming: OKClip (singular) vs OKClips → decided OKClip
+
+## Revision Notes (2026-07-12)
+- Confirmed ASP type: **A2A** (domain-fit: negotiation, revision, escrow) — not A2MCP
+- ASR switched Whisper → **Deepgram nova-2**: Whisper has no diarization + 25 MB cap;
+  Deepgram does transcription + word-level + diarization + long audio, cheaper
+- Pricing reworked: ASR cost is per-task (scales with source length), not per-clip →
+  clip-count tier + length surcharge; margins recomputed honestly
+- Added A2A core as first-class: negotiation, revision loop, evidence-backed delivery
+- Removed invented arbitration numbers ("5% bounty deposit") — use OKX A2A rules
+- Borrowed txwrap edge: evidence block + honesty rules (viral score capped at 95)
