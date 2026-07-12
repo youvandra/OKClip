@@ -1,3 +1,5 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { createA2ARouter } from "./a2a.js";
 import { config, features } from "./config.js";
@@ -31,17 +33,13 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.get("/", (_req, res) => {
-  res.json({
-    name: "OKClip",
-    description:
-      "A2A agent that creates smart video clips from YouTube, on OKX.AI",
-    docs: "https://github.com/youvandra/OKClip",
-  });
-});
-
 // A2A agent surface.
 app.use("/a2a", createA2ARouter({ queue, escrow }));
+
+// Static frontend (Alpine + Tailwind SPA). Works in dev (src) and prod (dist)
+// since both resolve to the sibling frontend/ directory.
+const frontendDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../frontend");
+app.use(express.static(frontendDir));
 
 // Serve produced clips and thumbnails (path-traversal safe).
 app.get("/clips/:jobId/:file", (req, res) => {

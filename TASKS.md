@@ -56,9 +56,9 @@
 - [x] `done` Implement escrow payment handling (per OKX A2A rules — verify)
 
 ## Phase 8: Frontend
-- [ ] `pending` Design landing page (Alpine.js + Tailwind — neo-brutalism)
-- [ ] `pending` Build task status UI
-- [ ] `pending` Build clip preview with metadata (viral score, reasons, speakers, thumbnail)
+- [x] `done` Design landing page (Alpine.js + Tailwind — neo-brutalism)
+- [x] `done` Build task status UI
+- [x] `done` Build clip preview with metadata (viral score, reasons, speakers, thumbnail)
 
 ## Phase 9: Expansion (if time)
 - [ ] `pending` Vertical reformat — 16:9 → 9:16 with face/subject tracking

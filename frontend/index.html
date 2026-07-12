@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OKClip — AI Smart Clip Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; }
+      .brut { border: 3px solid #000; box-shadow: 6px 6px 0 #000; }
+      .brut-sm { border: 2px solid #000; box-shadow: 3px 3px 0 #000; }
+    </style>
+  </head>
+  <body class="bg-[#faf7f0] text-black min-h-screen">
+    <div x-data="okclip()" class="max-w-4xl mx-auto px-4 py-8">
+      <!-- Header -->
+      <header class="mb-8">
+        <h1 class="text-4xl font-black tracking-tight">
+          OK<span class="bg-lime-300 px-1 brut-sm">Clip</span>
+        </h1>
+        <p class="mt-2 font-medium text-neutral-700">
+          An A2A agent on OKX.AI. YouTube URL + a brief in, decision-grade
+          clips out — subtitles, viral scores, and the reasons each moment was
+          picked.
+        </p>
+      </header>
+
+      <!-- Brief form -->
+      <section class="bg-white brut p-5 mb-6">
+        <label class="block font-bold mb-1">YouTube URL</label>
+        <input x-model="brief.url" type="url" placeholder="https://youtu.be/..."
+          class="w-full brut-sm p-2 mb-3 bg-[#faf7f0]" />
+
+        <label class="block font-bold mb-1">What should I clip?</label>
+        <input x-model="brief.prompt" type="text"
+          placeholder="3 best DeFi moments, punchy, for TikTok"
+          class="w-full brut-sm p-2 mb-3 bg-[#faf7f0]" />
+
+        <div class="flex items-center gap-3 mb-4">
+          <label class="font-bold">Clips</label>
+          <select x-model.number="brief.clipCount" class="brut-sm p-2 bg-[#faf7f0]">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </div>
+
+        <button @click="doNegotiate()" :disabled="loading"
+          class="bg-lime-300 brut-sm px-4 py-2 font-black disabled:opacity-50">
+          <span x-show="!loading">Negotiate terms</span>
+          <span x-show="loading">Working…</span>
+        </button>
+        <p x-show="error" x-text="error" class="text-red-600 font-bold mt-3"></p>
+      </section>
+
+      <!-- Proposal -->
+      <section x-show="proposal" class="bg-yellow-100 brut p-5 mb-6">
+        <h2 class="font-black text-xl mb-2">Proposal</h2>
+        <template x-if="proposal && proposal.kind === 'proposal'">
+          <div>
+            <p class="font-bold text-2xl mb-1">
+              <span x-text="proposal.priceBreakdown.totalUsdt"></span> USDT
+            </p>
+            <p class="text-sm text-neutral-700 mb-2" x-text="proposal.priceBreakdown.note"></p>
+            <p class="font-medium">
+              <span x-text="proposal.terms.clipCount"></span> clip(s),
+              <span x-text="proposal.terms.aspectRatio"></span>,
+              up to <span x-text="proposal.terms.maxClipSeconds"></span>s each,
+              <span x-text="proposal.terms.revisionRounds"></span> revision round.
+            </p>
+            <ul class="list-disc ml-5 mt-2 text-sm text-neutral-700">
+              <template x-for="a in proposal.assumptions"><li x-text="a"></li></template>
+            </ul>
+            <button @click="doAccept()" :disabled="loading"
+              class="bg-black text-white brut-sm px-4 py-2 font-black mt-3">
+              Accept &amp; generate
+            </button>
+          </div>
+        </template>
+        <template x-if="proposal && proposal.kind === 'clarify'">
+          <ul class="list-disc ml-5">
+            <template x-for="q in proposal.questions"><li x-text="q"></li></template>
+          </ul>
+        </template>
+        <template x-if="proposal && proposal.kind === 'decline'">
+          <p class="font-bold text-red-600" x-text="proposal.reason"></p>
+        </template>
+      </section>
+
+      <!-- Job status -->
+      <section x-show="job" class="mb-6">
+        <div class="bg-white brut p-5">
+          <div class="flex items-center justify-between">
+            <h2 class="font-black text-xl">Job</h2>
+            <span class="brut-sm px-2 py-1 font-bold bg-lime-200" x-text="job && job.status"></span>
+          </div>
+          <p class="mt-2 text-sm text-neutral-700" x-text="job && job.message"></p>
+        </div>
+      </section>
+
+      <!-- Clips -->
+      <section x-show="job && job.clips && job.clips.length" class="grid gap-5 md:grid-cols-2">
+        <template x-for="(clip, i) in (job ? job.clips : [])" :key="i">
+          <div class="bg-white brut p-4">
+            <div class="relative mb-3">
+              <img :src="clip.thumbnailUrl" alt="thumbnail"
+                class="w-full brut-sm bg-neutral-200" onerror="this.style.display='none'" />
+              <span class="absolute top-2 right-2 bg-lime-300 brut-sm px-2 font-black"
+                x-text="'🔥 ' + clip.viralScore"></span>
+            </div>
+            <p class="text-sm italic text-neutral-700 mb-2" x-text="'“' + clip.transcriptSnippet + '”'"></p>
+            <p class="text-xs font-bold mb-1">Why this moment</p>
+            <ul class="list-disc ml-5 text-xs text-neutral-700 mb-2">
+              <template x-for="r in clip.reasons"><li x-text="r"></li></template>
+            </ul>
+            <p class="text-xs mb-2">
+              <span class="font-bold">Speakers:</span>
+              <span x-text="clip.speakers.join(', ') || '—'"></span> ·
+              <span x-text="clip.durationSec + 's'"></span> ·
+              conf <span x-text="clip.confidence"></span>
+            </p>
+            <p class="text-xs mb-3" x-text="clip.caption"></p>
+            <div class="flex gap-2">
+              <a :href="clip.downloadUrl" class="bg-lime-300 brut-sm px-3 py-1 font-bold text-sm">Download</a>
+              <button @click="doRevise(i)" x-show="!job.approved && canRevise"
+                class="brut-sm px-3 py-1 font-bold text-sm">Revise</button>
+            </div>
+          </div>
+        </template>
+      </section>
+
+      <!-- Approve -->
+      <section x-show="job && job.status === 'done' && !job.approved" class="mt-6">
+        <button @click="doApprove()" :disabled="loading"
+          class="bg-black text-white brut px-6 py-3 font-black text-lg">
+          Approve &amp; release escrow
+        </button>
+      </section>
+      <section x-show="job && job.approved" class="mt-6">
+        <p class="font-black text-xl text-lime-700">✓ Approved — escrow released.</p>
+      </section>
+    </div>
+
+    <script>
+      function okclip() {
+        return {
+          brief: { url: "", prompt: "", clipCount: 3 },
+          agentId: "web-" + Math.random().toString(36).slice(2, 8),
+          proposal: null,
+          job: null,
+          loading: false,
+          error: "",
+          poller: null,
+          get canRevise() {
+            return this.job && this.job.status === "done" && !this.job.approved;
+          },
+          async api(path, opts) {
+            const res = await fetch(path, {
+              method: opts?.method || "GET",
+              headers: { "Content-Type": "application/json" },
+              body: opts?.body ? JSON.stringify(opts.body) : undefined,
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error?.formErrors?.[0] || data.error || "request failed");
+            return data;
+          },
+          async doNegotiate() {
+            this.error = ""; this.job = null; this.proposal = null; this.loading = true;
+            try {
+              this.proposal = await this.api("/a2a/negotiate", {
+                method: "POST", body: { agentId: this.agentId, brief: this.brief },
+              });
+            } catch (e) { this.error = e.message; }
+            this.loading = false;
+          },
+          async doAccept() {
+            if (this.proposal?.kind !== "proposal") return;
+            this.loading = true; this.error = "";
+            try {
+              const r = await this.api("/a2a/jobs", {
+                method: "POST",
+                body: { agentId: this.agentId, brief: this.brief, terms: this.proposal.terms },
+              });
+              this.startPolling(r.jobId);
+            } catch (e) { this.error = e.message; }
+            this.loading = false;
+          },
+          startPolling(jobId) {
+            clearInterval(this.poller);
+            const tick = async () => {
+              try {
+                this.job = await this.api("/a2a/jobs/" + jobId);
+                if (["done", "failed"].includes(this.job.status)) clearInterval(this.poller);
+              } catch (e) { this.error = e.message; clearInterval(this.poller); }
+            };
+            tick();
+            this.poller = setInterval(tick, 2000);
+          },
+          async doApprove() {
+            this.loading = true;
+            try { this.job = await this.api("/a2a/jobs/" + this.job.jobId + "/approve", { method: "POST" }); }
+            catch (e) { this.error = e.message; }
+            this.loading = false;
+          },
+          async doRevise(i) {
+            const feedback = prompt("What should change about clip " + (i + 1) + "?");
+            if (!feedback) return;
+            try {
+              await this.api("/a2a/jobs/" + this.job.jobId + "/revise", {
+                method: "POST", body: { rejections: [{ clipIndex: i, feedback }] },
+              });
+              this.startPolling(this.job.jobId);
+            } catch (e) { this.error = e.message; }
+          },
+        };
+      }
+    </script>
+  </body>
+</html>
