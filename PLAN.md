@@ -347,6 +347,27 @@ Single-worker sequential; max 1 concurrent download to avoid bandwidth saturatio
 1:24 — End card: "OKClip — on OKX.AI"
 ```
 
+## Roadmap — Big Swings (beyond MVP)
+
+The MVP proves the A2A clip loop. The larger bet is that OKClip is not a clip tool
+but a **video-comprehension primitive for agents**. Full strategy in
+[docs/VISION.md](docs/VISION.md). Defensible directions, by moat strength:
+
+| Direction | What | Moat |
+|-----------|------|------|
+| Multi-source ingest | Podcast RSS, Twitch VOD, Zoom recording, upload, X/TikTok — not YouTube-only | 🟢 widens funnel |
+| Format fan-out | 1 video → X thread + LinkedIn carousel + Shorts + quote cards + audiogram | 🟢 content-campaign engine |
+| Comprehension API | "Index this video", "find every moment X", searchable transcript + topics + emotion | 🔵 bigger TAM |
+| Cross-lingual | Detect language + translate → clips in N languages from one source | 🔵 reach multiplier |
+| **Outcome loop** | Track which posted clips went viral → calibrate `viralScore` on real outcomes | 🔴 compounding data moat |
+| **Provenance attestation** | Sign each clip as a faithful excerpt (crop+subtitle only) — trust primitive vs deepfakes (borrow txwrap EIP-191) | 🔴 defensible trust |
+| Live clipping | Clip a livestream in real time — viral moment from an X Space / earnings call in seconds | 🔴 news/trading edge |
+| Creative-director negotiation | Propose better moments than the brief asked for — judgment, not just cutting | 🔴 A2A differentiator |
+
+**Hackathon scope:** build MVP (evidence clips + negotiation + revision). If time,
+add multi-source ingest, a format fan-out demo, and an outcome-loop stub. Pitch the
+rest as vision — no scope creep.
+
 ## Success Metrics
 - Agent-native differentiator: no existing AI clip tool has A2A integration
 - Decision-grade: every clip carries why-picked reasons + evidence (the txwrap edge)
