@@ -43,17 +43,17 @@
 - [x] `done` Storage: data/preferences/<agentId>.json
 
 ## Phase 6: Storage & Delivery
-- [ ] `pending` Set up temp storage (/tmp/okclip/)
-- [ ] `pending` Transcript cache for revision window (avoid re-ASR)
-- [ ] `pending` Implement clip upload & download link generation
-- [ ] `pending` Implement auto-cleanup (24 hour TTL)
-- [ ] `pending` Handle file size limits
+- [x] `done` Set up temp storage (/tmp/okclip/)
+- [x] `done` Transcript cache for revision window (avoid re-ASR)
+- [x] `done` Implement clip upload & download link generation
+- [x] `done` Implement auto-cleanup (24 hour TTL)
+- [x] `done` Handle file size limits
 
 ## Phase 7: A2A Integration
-- [ ] `pending` Implement A2A service registration on OKX.AI (asp, category content)
-- [ ] `pending` Build negotiation & pricing logic (clip tiers + length surcharge)
-- [ ] `pending` Build delivery & approval flow
-- [ ] `pending` Implement escrow payment handling (per OKX A2A rules — verify)
+- [ ] `manual` Implement A2A service registration on OKX.AI (asp, category content) — needs wallet signature
+- [x] `done` Build negotiation & pricing logic (clip tiers + length surcharge)
+- [x] `done` Build delivery & approval flow
+- [x] `done` Implement escrow payment handling (per OKX A2A rules — verify)
 
 ## Phase 8: Frontend
 - [ ] `pending` Design landing page (Alpine.js + Tailwind — neo-brutalism)
