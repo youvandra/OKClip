@@ -1,9 +1,8 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { createA2ARouter } from "./a2a.js";
 import { config, features } from "./config.js";
-import { InMemoryEscrow } from "./escrow.js";
+import { createJobsRouter } from "./jobs.js";
 import { logger } from "./logger.js";
 import { runPipeline } from "./pipeline.js";
 import { JobQueue } from "./queue.js";
@@ -16,8 +15,6 @@ const queue = new JobQueue(async (job) => {
     setStatus: (status, patch) => queue.setStatus(job.id, status, patch),
   });
 });
-
-const escrow = new InMemoryEscrow();
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -33,8 +30,8 @@ app.get("/health", (_req, res) => {
   });
 });
 
-// A2A agent surface.
-app.use("/a2a", createA2ARouter({ queue, escrow }));
+// Internal clip-work API (frontend + onchainos ASP agent).
+app.use("/api", createJobsRouter(queue));
 
 // Static frontend (Alpine + Tailwind SPA). Works in dev (src) and prod (dist)
 // since both resolve to the sibling frontend/ directory.

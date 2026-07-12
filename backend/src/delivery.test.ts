@@ -28,7 +28,6 @@ test("buildDelivery reports ready clips and remaining revisions", () => {
   const d = buildDelivery(job({ output: [] }));
   assert.equal(d.status, "done");
   assert.match(d.message, /revision round/);
-  assert.equal(d.approved, false);
 });
 
 test("buildDelivery surfaces failures", () => {
@@ -36,9 +35,8 @@ test("buildDelivery surfaces failures", () => {
   assert.match(d.message, /boom/);
 });
 
-test("canRevise respects rounds and approval", () => {
+test("canRevise respects rounds and status", () => {
   assert.equal(canRevise(job()), true);
-  assert.equal(canRevise(job({ approved: true })), false);
   assert.equal(canRevise(job({ revisionsUsed: 1 })), false);
   assert.equal(canRevise(job({ status: "queued" })), false);
 });

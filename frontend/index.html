@@ -125,22 +125,15 @@
             <p class="text-xs mb-3" x-text="clip.caption"></p>
             <div class="flex gap-2">
               <a :href="clip.downloadUrl" class="bg-lime-300 brut-sm px-3 py-1 font-bold text-sm">Download</a>
-              <button @click="doRevise(i)" x-show="!job.approved && canRevise"
+              <button @click="doRevise(i)" x-show="canRevise"
                 class="brut-sm px-3 py-1 font-bold text-sm">Revise</button>
             </div>
           </div>
         </template>
       </section>
 
-      <!-- Approve -->
-      <section x-show="job && job.status === 'done' && !job.approved" class="mt-6">
-        <button @click="doApprove()" :disabled="loading"
-          class="bg-black text-white brut px-6 py-3 font-black text-lg">
-          Approve &amp; release escrow
-        </button>
-      </section>
-      <section x-show="job && job.approved" class="mt-6">
-        <p class="font-black text-xl text-lime-700">✓ Approved — escrow released.</p>
+      <section x-show="job && job.status === 'done'" class="mt-6">
+        <p class="font-black text-lg text-lime-700">✓ Delivered. In A2A, your agent approves on OKX to release escrow.</p>
       </section>
     </div>
 
@@ -155,7 +148,7 @@
           error: "",
           poller: null,
           get canRevise() {
-            return this.job && this.job.status === "done" && !this.job.approved;
+            return this.job && this.job.status === "done";
           },
           async api(path, opts) {
             const res = await fetch(path, {
@@ -170,7 +163,7 @@
           async doNegotiate() {
             this.error = ""; this.job = null; this.proposal = null; this.loading = true;
             try {
-              this.proposal = await this.api("/a2a/negotiate", {
+              this.proposal = await this.api("/api/negotiate", {
                 method: "POST", body: { agentId: this.agentId, brief: this.brief },
               });
             } catch (e) { this.error = e.message; }
@@ -180,7 +173,7 @@
             if (this.proposal?.kind !== "proposal") return;
             this.loading = true; this.error = "";
             try {
-              const r = await this.api("/a2a/jobs", {
+              const r = await this.api("/api/jobs", {
                 method: "POST",
                 body: { agentId: this.agentId, brief: this.brief, terms: this.proposal.terms },
               });
@@ -192,24 +185,18 @@
             clearInterval(this.poller);
             const tick = async () => {
               try {
-                this.job = await this.api("/a2a/jobs/" + jobId);
+                this.job = await this.api("/api/jobs/" + jobId);
                 if (["done", "failed"].includes(this.job.status)) clearInterval(this.poller);
               } catch (e) { this.error = e.message; clearInterval(this.poller); }
             };
             tick();
             this.poller = setInterval(tick, 2000);
           },
-          async doApprove() {
-            this.loading = true;
-            try { this.job = await this.api("/a2a/jobs/" + this.job.jobId + "/approve", { method: "POST" }); }
-            catch (e) { this.error = e.message; }
-            this.loading = false;
-          },
           async doRevise(i) {
             const feedback = prompt("What should change about clip " + (i + 1) + "?");
             if (!feedback) return;
             try {
-              await this.api("/a2a/jobs/" + this.job.jobId + "/revise", {
+              await this.api("/api/jobs/" + this.job.jobId + "/revise", {
                 method: "POST", body: { rejections: [{ clipIndex: i, feedback }] },
               });
               this.startPolling(this.job.jobId);

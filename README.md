@@ -13,7 +13,8 @@ Built for the OKX.AI Genesis Hackathon. Sibling project to
 | | |
 |---|---|
 | **Type** | A2A (Agent-to-Agent) — negotiated, escrow-settled on X Layer |
-| **Agent surface** | `POST /a2a/*` (JSON) |
+| **Protocol** | OKX onchainos agent (CLI + XMTP state machine); escrow is gas-free via the platform paymaster |
+| **Work engine** | this repo — invoked by the ASP agent on `job_accepted` |
 | **Human surface** | `/` — Alpine + Tailwind SPA |
 | **Pricing** | clip-count tier + source-length surcharge (see below) |
 
@@ -38,14 +39,27 @@ Full strategy in [docs/VISION.md](docs/VISION.md).
 
 ---
 
-## A2A flow
+## How A2A works here
 
+OKX A2A is **not** an HTTP endpoint — it is an agent process driven by the
+`onchainos agent` CLI over XMTP, with escrow funded on the platform (gas-free).
+The ASP agent negotiates, applies, and on `job_accepted` runs OKClip as its work
+engine, then delivers the clips over XMTP.
+
+Two ways to invoke the engine:
+
+**CLI** (what the ASP agent shells out to):
 ```
-POST /a2a/negotiate   { agentId, brief }        -> proposal | clarify | decline
-POST /a2a/jobs        { agentId, brief, terms } -> { jobId }  (funds escrow)
-GET  /a2a/jobs/:id                              -> delivery (poll)
-POST /a2a/jobs/:id/approve                      -> releases escrow, records memory
-POST /a2a/jobs/:id/revise { rejections[] }      -> re-clips rejected moments
+okclip run --url <yt> --prompt "3 DeFi clips" --clips 3 [--aspect 9:16]
+# -> JSON deliverable: metadata + absolute clip file paths + an XMTP-ready summary
+```
+
+**Internal HTTP API** (the frontend + local callers):
+```
+POST /api/negotiate   { agentId, brief }        -> proposal | clarify | decline
+POST /api/jobs        { agentId, brief, terms } -> { jobId }
+GET  /api/jobs/:id                              -> delivery (poll)
+POST /api/jobs/:id/revise { rejections[] }      -> re-clips rejected moments
 GET  /clips/:jobId/:file                        -> the produced mp4 / thumbnail
 ```
 
@@ -141,8 +155,11 @@ runs: `DEEPGRAM_API_KEY`, `SUMOPOD_API_KEY`. The server boots without them
 
 ```
 backend/src/
-  index.ts        Express server: A2A router, clip serving, cleanup
-  a2a.ts          A2A endpoints (negotiate / jobs / approve / revise)
+  index.ts        Express server: work API, clip serving, cleanup
+  cli.ts          `okclip run` — headless engine the ASP agent shells out to
+  worker.ts       run one job to completion (no HTTP)
+  a2a-adapter.ts  OKX A2A job <-> Brief + XMTP delivery summary
+  jobs.ts         internal work API (negotiate / jobs / revise)
   negotiation.ts  pricing, aspect inference, decline/clarify
   pipeline.ts     download -> transcribe -> analyze -> clip orchestration
   downloader.ts   yt-dlp (probe, download, playlist)
@@ -155,7 +172,6 @@ backend/src/
   stitch.ts       highlight-reel concat
   memory.ts       per-agent style memory (data moat)
   storage.ts      safe clip serving + TTL cleanup
-  escrow.ts       escrow seam (in-memory stub; OKX in prod)
   queue.ts        in-memory single-worker job queue
   delivery.ts     decision-grade delivery envelope
   config.ts types.ts logger.ts exec.ts

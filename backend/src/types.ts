@@ -126,10 +126,8 @@ export interface ClipJob {
   runnerUps?: RunnerUpMoment[];
   /** Kept for the revision window so revisions skip re-ASR. */
   transcriptCache?: Transcript;
-  /** Kept until approval/expiry so revisions skip re-download. */
+  /** Kept until the revision window expires so revisions skip re-download. */
   sourcePath?: string;
-  /** Set once the requesting agent approves the delivery (escrow releases). */
-  approved?: boolean;
   /** Revision rounds consumed so far. */
   revisionsUsed: number;
   error?: string;
@@ -164,7 +162,6 @@ export interface Delivery {
   clips: ClipResult[];
   runnerUps: RunnerUpMoment[];
   message: string;
-  approved: boolean;
 }
 
 /** A per-clip rejection during the revision loop. */

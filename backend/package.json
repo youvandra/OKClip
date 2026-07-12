@@ -4,6 +4,9 @@
   "description": "OKClip — A2A agent that creates smart video clips from YouTube, on OKX.AI",
   "type": "module",
   "license": "MIT",
+  "bin": {
+    "okclip": "dist/cli.js"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
