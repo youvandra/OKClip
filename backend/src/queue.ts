@@ -28,6 +28,7 @@ export class JobQueue {
       status: "queued",
       brief,
       terms,
+      revisionsUsed: 0,
       createdAt: now,
       updatedAt: now,
     };

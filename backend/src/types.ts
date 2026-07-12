@@ -126,7 +126,49 @@ export interface ClipJob {
   runnerUps?: RunnerUpMoment[];
   /** Kept for the revision window so revisions skip re-ASR. */
   transcriptCache?: Transcript;
+  /** Kept until approval/expiry so revisions skip re-download. */
+  sourcePath?: string;
+  /** Set once the requesting agent approves the delivery (escrow releases). */
+  approved?: boolean;
+  /** Revision rounds consumed so far. */
+  revisionsUsed: number;
   error?: string;
   createdAt: number;
   updatedAt: number;
+}
+
+/** Result of a negotiation round, before escrow is funded. */
+export type NegotiationResult =
+  | {
+      kind: "proposal";
+      terms: NegotiatedTerms;
+      priceBreakdown: PriceBreakdown;
+      /** Inferred choices the agent should confirm (e.g. aspect ratio). */
+      assumptions: string[];
+    }
+  | { kind: "clarify"; questions: string[] }
+  | { kind: "decline"; reason: string };
+
+/** Transparent price components (honesty: the fee matches real cost). */
+export interface PriceBreakdown {
+  baseUsdt: string;
+  lengthSurchargeUsdt: string;
+  totalUsdt: string;
+  note: string;
+}
+
+/** The full delivery handed back to the requesting agent. */
+export interface Delivery {
+  jobId: string;
+  status: JobStatus;
+  clips: ClipResult[];
+  runnerUps: RunnerUpMoment[];
+  message: string;
+  approved: boolean;
+}
+
+/** A per-clip rejection during the revision loop. */
+export interface ClipRejection {
+  clipIndex: number;
+  feedback: string;
 }

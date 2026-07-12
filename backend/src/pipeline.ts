@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { analyze, segmentTranscript } from "./analyzer.js";
 import { clip } from "./clipper.js";
@@ -9,6 +9,7 @@ import { transcribe } from "./transcriber.js";
 import type {
   ClipEvidence,
   ClipJob,
+  ClipRejection,
   ClipResult,
   JobStatus,
   SelectedMoment,
@@ -67,6 +68,7 @@ export async function runPipeline(
 
   hooks.setStatus("downloading");
   const videoPath = await download(job.brief.url, workDir);
+  hooks.setStatus("downloading", { sourcePath: videoPath });
 
   hooks.setStatus("transcribing");
   const transcript = await transcribe(videoPath);
@@ -78,12 +80,12 @@ export async function runPipeline(
   }
 
   hooks.setStatus("analyzing", { transcriptCache: transcript });
-  const moments = await analyze(transcript, job.brief);
+  const { selected: moments, runnerUps } = await analyze(transcript, job.brief);
   if (moments.length === 0) {
     throw new Error("No suitable moments found for the brief");
   }
 
-  hooks.setStatus("clipping");
+  hooks.setStatus("clipping", { runnerUps });
   const results: ClipResult[] = [];
   for (let i = 0; i < moments.length; i++) {
     const moment = moments[i]!;
@@ -107,11 +109,63 @@ export async function runPipeline(
     );
   }
 
-  hooks.setStatus("delivering", { output: results });
-
-  // Raw video is not needed past clipping.
-  await rm(videoPath, { force: true });
-
+  // Source is kept for the revision window; cleanup removes it by TTL.
   hooks.setStatus("done", { output: results });
   logger.info({ jobId: job.id, clips: results.length }, "Pipeline complete");
+}
+
+/**
+ * Re-clip rejected moments using the cached transcript and kept source (no
+ * re-download, no re-ASR). Feedback is folded into the brief for re-analysis.
+ */
+export async function reviseClips(
+  job: ClipJob,
+  rejections: ClipRejection[],
+  hooks: PipelineHooks,
+): Promise<void> {
+  if (!job.sourcePath || !job.transcriptCache) {
+    throw new Error("Revision unavailable: source or transcript expired");
+  }
+  hooks.setStatus("revising");
+
+  const feedback = rejections
+    .map((r) => `Clip ${r.clipIndex + 1}: ${r.feedback}`)
+    .join("; ");
+  const revisedBrief = {
+    ...job.brief,
+    prompt: `${job.brief.prompt}\nRevision feedback: ${feedback}`,
+  };
+
+  const { selected: moments } = await analyze(job.transcriptCache, revisedBrief);
+  if (moments.length === 0) {
+    throw new Error("No alternative moments found for the revision feedback");
+  }
+
+  const results = [...(job.output ?? [])];
+  const workDir = join(config.STORAGE_DIR, job.id);
+  const round = job.revisionsUsed + 1;
+
+  for (let k = 0; k < rejections.length; k++) {
+    const idx = rejections[k]!.clipIndex;
+    const moment = moments[k % moments.length]!;
+    if (idx < 0 || idx >= results.length) continue;
+    const filename = `clip-${idx + 1}-r${round}.mp4`;
+    const output = join(workDir, filename);
+    await clip({
+      input: job.sourcePath,
+      output,
+      startSec: moment.startSec,
+      endSec: moment.endSec,
+      aspectRatio: job.terms.aspectRatio,
+    });
+    results[idx] = toClipResult(
+      moment,
+      `/clips/${job.id}/${filename}`,
+      "",
+      job.transcriptCache,
+    );
+  }
+
+  hooks.setStatus("done", { output: results, revisionsUsed: round });
+  logger.info({ jobId: job.id, round }, "Revision complete");
 }

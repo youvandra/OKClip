@@ -3,10 +3,20 @@ import { config } from "./config.js";
 import { logger } from "./logger.js";
 import type {
   Brief,
+  RunnerUpMoment,
   SelectedMoment,
   Transcript,
   TranscriptWord,
 } from "./types.js";
+
+/** Analyzer output: the chosen clips plus scored-but-unused candidates. */
+export interface AnalysisResult {
+  selected: SelectedMoment[];
+  runnerUps: RunnerUpMoment[];
+}
+
+/** How many extra candidates to surface as runner-ups. */
+const MAX_RUNNER_UPS = 3;
 
 /** Viral score is a heuristic and never certainty (see PLAN honesty rules). */
 export const MAX_VIRAL_SCORE = 95;
@@ -72,7 +82,7 @@ export function buildAnalysisPrompt(
 
   const user = [
     `Brief: "${brief.prompt}"`,
-    `Clips wanted: ${brief.clipCount}`,
+    `Clips wanted: ${brief.clipCount} (also include up to 3 extra strong candidates as runner-ups, ordered best-first)`,
     `Max clip length: ${brief.maxClipSeconds ?? 60}s`,
     "",
     "Transcript (segment timestamps in seconds):",
@@ -145,43 +155,56 @@ function speakerLabel(index: number, total: number): string {
   return index === 0 ? "Host" : `Guest ${index}`;
 }
 
-/** Parse the LLM JSON, clamp values, and snap each moment to sentences. */
+function toSelected(m: RawMoment, transcript: Transcript): SelectedMoment {
+  const snapped = snapToSentenceBoundaries(
+    transcript.words,
+    m.startSec,
+    m.endSec,
+  );
+  return {
+    startSec: snapped.startSec,
+    endSec: snapped.endSec,
+    viralScore: Math.max(0, Math.min(MAX_VIRAL_SCORE, Math.round(m.viralScore))),
+    confidence: Math.max(0, Math.min(1, m.confidence)),
+    reasons: Array.isArray(m.reasons) ? m.reasons : [],
+    transcriptSnippet: snapped.snippet,
+    speakers: snapped.speakers.map((s) =>
+      speakerLabel(s, transcript.speakerCount),
+    ),
+    caption: m.caption ?? "",
+    hashtags: Array.isArray(m.hashtags) ? m.hashtags : [],
+  };
+}
+
+/**
+ * Parse the LLM JSON, clamp values, snap to sentences, and split into the
+ * chosen clips (first clipCount) and runner-up candidates.
+ */
 export function parseMoments(
   raw: string,
   transcript: Transcript,
   clipCount: number,
-): SelectedMoment[] {
+): AnalysisResult {
   let parsed: { moments?: RawMoment[] };
   try {
     parsed = JSON.parse(raw) as { moments?: RawMoment[] };
   } catch {
     throw new Error("Analyzer returned invalid JSON");
   }
-  const moments = parsed.moments ?? [];
-
-  return moments
-    .slice(0, clipCount)
-    .map((m) => {
-      const snapped = snapToSentenceBoundaries(
-        transcript.words,
-        m.startSec,
-        m.endSec,
-      );
-      return {
-        startSec: snapped.startSec,
-        endSec: snapped.endSec,
-        viralScore: Math.max(0, Math.min(MAX_VIRAL_SCORE, Math.round(m.viralScore))),
-        confidence: Math.max(0, Math.min(1, m.confidence)),
-        reasons: Array.isArray(m.reasons) ? m.reasons : [],
-        transcriptSnippet: snapped.snippet,
-        speakers: snapped.speakers.map((s) =>
-          speakerLabel(s, transcript.speakerCount),
-        ),
-        caption: m.caption ?? "",
-        hashtags: Array.isArray(m.hashtags) ? m.hashtags : [],
-      } satisfies SelectedMoment;
-    })
+  const all = (parsed.moments ?? [])
+    .map((m) => toSelected(m, transcript))
     .filter((m) => m.endSec > m.startSec);
+
+  const selected = all.slice(0, clipCount);
+  const runnerUps: RunnerUpMoment[] = all
+    .slice(clipCount, clipCount + MAX_RUNNER_UPS)
+    .map((m) => ({
+      timestamp: { startSec: m.startSec, endSec: m.endSec },
+      viralScore: m.viralScore,
+      reason: m.reasons[0] ?? m.transcriptSnippet.slice(0, 80),
+    }));
+
+  return { selected, runnerUps };
 }
 
 /**
@@ -191,7 +214,7 @@ export function parseMoments(
 export async function analyze(
   transcript: Transcript,
   brief: Brief,
-): Promise<SelectedMoment[]> {
+): Promise<AnalysisResult> {
   if (!config.SUMOPOD_API_KEY) {
     throw new Error("SUMOPOD_API_KEY is not configured");
   }
@@ -212,7 +235,10 @@ export async function analyze(
   });
 
   const content = completion.choices[0]?.message?.content ?? "{}";
-  const moments = parseMoments(content, transcript, brief.clipCount);
-  logger.info({ selected: moments.length }, "Moment analysis complete");
-  return moments;
+  const result = parseMoments(content, transcript, brief.clipCount);
+  logger.info(
+    { selected: result.selected.length, runnerUps: result.runnerUps.length },
+    "Moment analysis complete",
+  );
+  return result;
 }

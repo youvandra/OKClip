@@ -17,12 +17,12 @@
 - [x] `done` Wire up pipeline: download → transcribe → analyze → clip
 
 ## Phase 3: A2A Core — Negotiation & Decision-Grade Output
-- [ ] `pending` Negotiation: clarify brief (platform, tone, length) via Q&A
-- [ ] `pending` Negotiation: counter-offer scope/price, decline out-of-scope
-- [ ] `pending` Evidence block — per-clip why-picked reasons + confidence
-- [ ] `pending` Decision-grade delivery — structured metadata agent can approve
-- [ ] `pending` Revision loop — re-clip rejected moments from cached transcript
-- [ ] `pending` Runner-up moments — return candidate timestamps not clipped
+- [x] `done` Negotiation: clarify brief (platform, tone, length) via Q&A
+- [x] `done` Negotiation: counter-offer scope/price, decline out-of-scope
+- [x] `done` Evidence block — per-clip why-picked reasons + confidence
+- [x] `done` Decision-grade delivery — structured metadata agent can approve
+- [x] `done` Revision loop — re-clip rejected moments from cached transcript
+- [x] `done` Runner-up moments — return candidate timestamps not clipped
 
 ## Phase 4: Video Processing — Polish
 - [ ] `pending` Auto-subtitles — burn Deepgram transcript into video overlay

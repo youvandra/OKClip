@@ -65,23 +65,26 @@ test("parseMoments clamps score, snaps, and drops invalid", () => {
       },
     ],
   });
-  const moments = parseMoments(raw, transcript, 3);
-  assert.equal(moments.length, 1);
-  const m = moments[0]!;
+  const { selected } = parseMoments(raw, transcript, 3);
+  assert.equal(selected.length, 1);
+  const m = selected[0]!;
   assert.equal(m.viralScore, MAX_VIRAL_SCORE); // clamped from 150
   assert.equal(m.confidence, 1); // clamped from 2
   assert.equal(m.transcriptSnippet, "This is DeFi.");
   assert.deepEqual(m.speakers, ["Host"]);
 });
 
-test("parseMoments respects clipCount", () => {
+test("parseMoments splits selected and runner-ups by clipCount", () => {
   const raw = JSON.stringify({
     moments: [
-      { startSec: 0, endSec: 1, viralScore: 50, confidence: 0.5, reasons: [], caption: "", hashtags: [] },
-      { startSec: 1.1, endSec: 2.2, viralScore: 60, confidence: 0.6, reasons: [], caption: "", hashtags: [] },
+      { startSec: 0, endSec: 1, viralScore: 50, confidence: 0.5, reasons: ["a"], caption: "", hashtags: [] },
+      { startSec: 1.1, endSec: 2.2, viralScore: 60, confidence: 0.6, reasons: ["b"], caption: "", hashtags: [] },
     ],
   });
-  assert.equal(parseMoments(raw, transcript, 1).length, 1);
+  const { selected, runnerUps } = parseMoments(raw, transcript, 1);
+  assert.equal(selected.length, 1);
+  assert.equal(runnerUps.length, 1);
+  assert.equal(runnerUps[0]?.reason, "b");
 });
 
 test("parseMoments throws on invalid JSON", () => {
