@@ -9,9 +9,10 @@ module.exports = {
       instances: 1,
       autorestart: true,
       max_restarts: 10,
+      // PORT and secrets come from backend/.env (loaded via dotenv), so the
+      // port can differ per host without editing this file.
       env: {
         NODE_ENV: "production",
-        PORT: "3001",
       },
     },
   ],
