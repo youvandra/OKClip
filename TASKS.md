@@ -71,11 +71,12 @@ Tooling shipped (README, ecosystem.config.cjs, deploy/nginx.conf.example, CI,
 scripts/smoke.sh, docs/ASP_REGISTRATION.md, docs/SUBMISSION.md). Remaining items
 need the VPS / API keys / wallet, so they are yours to run:
 - [x] `done` CI (typecheck + tests), smoke script, deploy configs, submission docs
-- [ ] `manual` Deploy backend to VPS (pm2 via ecosystem.config.cjs)
-- [ ] `manual` Deploy frontend (served by backend; nginx sample provided)
-- [ ] `manual` Install yt-dlp & FFmpeg on VPS
-- [ ] `manual` Test full flow end-to-end (needs Deepgram + Sumopod keys + binaries)
-- [ ] `manual` Register + list ASP on OKX.AI (A2A) — wallet signature (docs/ASP_REGISTRATION.md)
+- [x] `done` Deploy backend to VPS (pm2, port 3002; nginx reverse proxy on IP)
+- [x] `done` Deploy frontend (served by backend)
+- [x] `done` Install yt-dlp & FFmpeg on VPS
+- [x] `done` Endpoint live: /health, /a2a/*, SPA reachable (SUMOPOD reused; analysis on)
+- [ ] `blocked` Full end-to-end run — needs a DEEPGRAM_API_KEY (transcription off until set)
+- [ ] `hold` Register + list ASP on OKX.AI (A2A) — deferred until project finalized (per discussion)
 - [ ] `manual` Create X post + demo video (script in docs/SUBMISSION.md)
 
 ## Discussion Notes (2026-07-11)
