@@ -2,11 +2,11 @@
 
 ## Phase 1: Foundation
 - [x] `done` Create AGENTS.md, PLAN.md, TASKS.md
-- [ ] `pending` Initialize project structure (directories, package.json, tsconfig)
-- [ ] `pending` Setup Express server with basic health endpoint
-- [ ] `pending` Setup environment config (Sumopod, Deepgram keys)
-- [ ] `pending` Create TypeScript types (task, clip, transcript, delivery, negotiation)
-- [ ] `pending` Implement job queue (in-memory, single-worker)
+- [x] `done` Initialize project structure (directories, package.json, tsconfig)
+- [x] `done` Setup Express server with basic health endpoint
+- [x] `done` Setup environment config (Sumopod, Deepgram keys)
+- [x] `done` Create TypeScript types (task, clip, transcript, delivery, negotiation)
+- [x] `done` Implement job queue (in-memory, single-worker)
 
 ## Phase 2: Video Processing — Core
 - [ ] `pending` Integrate yt-dlp for video downloading (720p)
