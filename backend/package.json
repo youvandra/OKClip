@@ -9,6 +9,8 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "asp": "node dist/asp-agent.js",
+    "asp:dev": "tsx watch src/asp-agent.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "node --import tsx --test src/**/*.test.ts",

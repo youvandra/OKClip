@@ -15,5 +15,21 @@ module.exports = {
         NODE_ENV: "production",
       },
     },
+    {
+      // The live A2A agent: polls the OKX task state machine and drives
+      // apply -> run engine -> deliver. Needs the onchainos CLI + a logged-in
+      // wallet + a reachable A2A gateway on the host.
+      name: "okclip-asp",
+      cwd: "./backend",
+      script: "dist/asp-agent.js",
+      instances: 1,
+      autorestart: true,
+      max_restarts: 10,
+      env: {
+        NODE_ENV: "production",
+        ONCHAINOS_BIN: "/home/ubuntu/.local/bin/onchainos",
+        OKCLIP_AGENT_ID: "5189",
+      },
+    },
   ],
 };
