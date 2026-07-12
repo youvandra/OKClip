@@ -4,17 +4,33 @@
  *
  * OKX A2A has no HTTP endpoint: a client agent publishes a task designating
  * OKClip, which moves through an on-chain state machine. This worker polls that
- * state deterministically (no LLM needed) and drives the provider side:
+ * state deterministically (no LLM) and drives the provider side:
  *
- *   status 0 (created)  -> apply   (accept the job at a negotiated price)
- *   status 1 (accepted) -> run the clip engine, then deliver over XMTP
+ *   0 created   -> apply   (accept the job at the offered budget)
+ *   1 accepted  -> run the clip engine, then deliver (in the background)
+ *   2 submitted -> delivered; waiting on the client
+ *   3 refused   -> stop
+ *   4 disputed  -> stop; needs manual/evidence handling
+ *   >=5         -> terminal; clean up
  *
- * Requires: onchainos CLI on PATH + a logged-in wallet + the A2A gateway
- * reachable (okx-a2a doctor green), plus the clip pipeline's runtime deps
- * (yt-dlp, ffmpeg, Deepgram/Sumopod keys).
+ * Requires: onchainos CLI on PATH + a logged-in wallet + a reachable A2A
+ * gateway (okx-a2a doctor green), plus the pipeline deps (yt-dlp, ffmpeg,
+ * Deepgram/Sumopod keys).
  */
+import { argv } from "node:process";
 import { join } from "node:path";
-import { buildDeliverySummary, parseJobToBrief } from "./a2a-adapter.js";
+import { pathToFileURL } from "node:url";
+import { buildDeliverySummary } from "./a2a-adapter.js";
+import {
+  alreadyDone,
+  briefFromTask,
+  clientOf,
+  isOurs,
+  isTerminalStatus,
+  jobIdOf,
+  STATUS,
+  statusOf,
+} from "./asp-parse.js";
 import { config } from "./config.js";
 import { buildDelivery } from "./delivery.js";
 import { run } from "./exec.js";
@@ -27,25 +43,23 @@ const AGENT_ID = process.env.OKCLIP_AGENT_ID ?? "5189";
 const ONCHAINOS = process.env.ONCHAINOS_BIN ?? "onchainos";
 const POLL_MS = Number(process.env.ASP_POLL_MS ?? 15_000);
 const TOKEN_SYMBOL = process.env.ASP_TOKEN_SYMBOL ?? "USDT";
-// Safety gate: when set, only act on tasks from this client agent. Keeps the
-// worker from applying to real clients before deliver is proven end-to-end.
+// Safety gate: when set, only act on tasks from this client agent.
 const ALLOWED_CLIENT = process.env.ASP_ALLOWED_CLIENT ?? "";
+// The engine is CPU-heavy, so bound concurrent deliveries.
+const MAX_CONCURRENT = Number(process.env.ASP_MAX_CONCURRENT ?? 1);
+const MAX_APPLY_TRIES = 3;
 
-type Phase = "applied" | "delivered" | "declined";
+type Phase = "applied" | "delivered" | "declined" | "disputed";
 const phases = new Map<string, Phase>();
-/** Clips already produced for a job, so deliver retries don't re-run the engine. */
+/** Clips already produced, so deliver retries don't re-run the engine. */
 const produced = new Map<string, { file: string; text: string }>();
-
-/** Does an error indicate the action already happened (idempotent no-op)? */
-function alreadyDone(err: unknown): boolean {
-  const m = (err instanceof Error ? err.message : String(err)).toLowerCase();
-  return m.includes("already") || m.includes("duplicate") || m.includes("exists");
-}
+const applyTries = new Map<string, number>();
+/** Jobs whose deliver is running in the background right now. */
+const inFlight = new Set<string>();
 
 /**
- * Run an onchainos command and parse its JSON stdout. The CLI signals failures
- * as `{ ok: false, error }` in stdout (often with exit code 0), so surface that
- * real error rather than a generic message.
+ * Run an onchainos command. The CLI signals failures as `{ ok:false, error }`
+ * in stdout (often with exit 0), so surface the real error.
  */
 async function oc(args: string[]): Promise<any> {
   const res = await run(ONCHAINOS, args, { timeoutMs: 120_000 });
@@ -54,7 +68,7 @@ async function oc(args: string[]): Promise<any> {
   try {
     json = JSON.parse(body);
   } catch {
-    /* non-JSON output */
+    /* non-JSON */
   }
   if (res.code !== 0 || (json && json.ok === false)) {
     throw new Error(
@@ -67,60 +81,8 @@ async function oc(args: string[]): Promise<any> {
   return json ?? {};
 }
 
-/** Apply attempts per job, to stop retrying a persistently-failing broadcast. */
-const applyTries = new Map<string, number>();
-const MAX_APPLY_TRIES = 3;
-
-/** Is OKClip the provider on this task? active-tasks annotates our own rows. */
-function isOurs(t: any): boolean {
-  if (String(t.myAgentId ?? "") === AGENT_ID && t.myRole === "asp") return true;
-  const provider = String(
-    t.providerAgentId ?? t.provider ?? t.aspAgentId ?? t.agentId ?? "",
-  );
-  return provider === AGENT_ID;
-}
-
-/** The client agent on the other side of the task. */
-function clientOf(t: any): string {
-  return String(t.counterpartyAgentId ?? t.userAgentId ?? "");
-}
-
-function jobIdOf(t: any): string {
-  return String(t.jobId ?? t.id ?? t.taskId ?? "");
-}
-
-/** Numeric task status (active-tasks: statusCode is the number; status is text). */
-function statusOf(t: any): number {
-  return Number(t.statusCode ?? t.status);
-}
-
-/** Build a Brief from the task's serviceParams / description. */
-function briefFromTask(t: any): Brief {
-  let params: Record<string, unknown> = {};
-  const raw = t.serviceParams ?? t.serviceBody ?? t.params;
-  if (typeof raw === "string") {
-    try {
-      params = JSON.parse(raw);
-    } catch {
-      /* ignore */
-    }
-  } else if (raw && typeof raw === "object") {
-    params = raw as Record<string, unknown>;
-  }
-  return parseJobToBrief({
-    description: String(t.description ?? t.title ?? ""),
-    serviceParams: params,
-  });
-}
-
-/**
- * Accept a newly-created job at a negotiated price. On a transient error the
- * phase is left unset so the next poll retries; a genuine "already applied"
- * is treated as success.
- */
+/** Accept a created job at the offered budget. */
 async function handleApply(jobId: string, t: any): Promise<void> {
-  // active-tasks does not carry serviceParams, so we accept the client's
-  // offered budget rather than re-negotiating by video length here.
   const price = String(t.tokenAmount ?? "0.5");
   const symbol = String(t.tokenSymbol ?? TOKEN_SYMBOL);
   try {
@@ -150,9 +112,9 @@ async function handleApply(jobId: string, t: any): Promise<void> {
 }
 
 /**
- * Produce clips for an accepted job (once, cached) and deliver them. Multiple
- * clips are stitched into a single reel since `deliver` attaches one file.
- * Deliver retries reuse the cached output instead of re-running the engine.
+ * Produce clips (once, cached) and deliver them. Multiple clips are stitched
+ * into one reel since `deliver` takes a single file. Runs in the background so
+ * the poll loop keeps applying to other jobs.
  */
 async function handleDeliver(jobId: string, t: any): Promise<void> {
   let out = produced.get(jobId);
@@ -208,7 +170,7 @@ async function handleDeliver(jobId: string, t: any): Promise<void> {
       phases.set(jobId, "delivered");
       return;
     }
-    throw err; // transient — retry deliver next poll (engine output cached)
+    throw err; // transient — retry next poll (engine output cached)
   }
   phases.set(jobId, "delivered");
   logger.info({ jobId }, "Delivered");
@@ -219,24 +181,48 @@ async function pollOnce(): Promise<void> {
   const tasks: any[] = out?.data?.tasks ?? [];
   for (const t of tasks) {
     const jobId = jobIdOf(t);
-    if (!jobId || !isOurs(t)) continue;
+    if (!jobId || !isOurs(t, AGENT_ID)) continue;
     if (ALLOWED_CLIENT && clientOf(t) !== ALLOWED_CLIENT) continue;
-    const status = statusOf(t);
+
     const phase = phases.get(jobId);
-    try {
-      if (status === 0 && phase !== "applied" && phase !== "declined") {
+    if (phase === "delivered" || phase === "declined" || phase === "disputed") {
+      continue;
+    }
+    const status = statusOf(t);
+
+    if (status === STATUS.created) {
+      try {
         await handleApply(jobId, t);
-      } else if (status === 1 && phase !== "delivered" && phase !== "declined") {
-        await handleDeliver(jobId, t);
+      } catch (err) {
+        logger.error({ jobId, err }, "Apply failed");
       }
-    } catch (err) {
-      logger.error({ jobId, err }, "Task handling failed");
+    } else if (status === STATUS.accepted) {
+      if (!inFlight.has(jobId) && inFlight.size < MAX_CONCURRENT) {
+        inFlight.add(jobId);
+        void handleDeliver(jobId, t)
+          .catch((err) => logger.error({ jobId, err }, "Deliver failed"))
+          .finally(() => inFlight.delete(jobId));
+      }
+    } else if (status === STATUS.submitted) {
+      phases.set(jobId, "delivered"); // already delivered; awaiting client
+    } else if (status === STATUS.refused) {
+      logger.warn({ jobId }, "Task refused by client");
+      phases.set(jobId, "declined");
+    } else if (status === STATUS.disputed) {
+      logger.warn({ jobId }, "Task disputed — needs manual/evidence handling");
+      phases.set(jobId, "disputed");
+    } else if (isTerminalStatus(status)) {
+      phases.set(jobId, "delivered");
+      produced.delete(jobId);
     }
   }
 }
 
 async function main(): Promise<void> {
-  logger.info({ AGENT_ID, POLL_MS }, "OKClip ASP worker started");
+  logger.info(
+    { AGENT_ID, POLL_MS, MAX_CONCURRENT, gated: ALLOWED_CLIENT || "off" },
+    "OKClip ASP worker started",
+  );
   for (;;) {
     try {
       await pollOnce();
@@ -247,7 +233,10 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  logger.error({ err }, "ASP worker crashed");
-  process.exit(1);
-});
+// Only start the loop when run directly, not when imported by tests.
+if (import.meta.url === pathToFileURL(argv[1] ?? "").href) {
+  main().catch((err) => {
+    logger.error({ err }, "ASP worker crashed");
+    process.exit(1);
+  });
+}
