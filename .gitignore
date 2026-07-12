@@ -12,3 +12,7 @@ docs/
 # local-only docs/notes — keep only README on GitHub
 *.md
 !README.md
+
+# yt-dlp cookies — never commit (account access)
+cookies.txt
+*.cookies
