@@ -67,12 +67,16 @@
 - [x] `done` Multi-language — auto-detect (Deepgram) → language-aware LLM prompt
 
 ## Phase 10: Polish & Deploy
-- [ ] `pending` Deploy backend to VPS
-- [ ] `pending` Deploy frontend
-- [ ] `pending` Install yt-dlp & FFmpeg on VPS
-- [ ] `pending` Test full flow end-to-end
-- [ ] `pending` Register + list ASP on OKX.AI (A2A)
-- [ ] `pending` Create X post + demo video
+Tooling shipped (README, ecosystem.config.cjs, deploy/nginx.conf.example, CI,
+scripts/smoke.sh, docs/ASP_REGISTRATION.md, docs/SUBMISSION.md). Remaining items
+need the VPS / API keys / wallet, so they are yours to run:
+- [x] `done` CI (typecheck + tests), smoke script, deploy configs, submission docs
+- [ ] `manual` Deploy backend to VPS (pm2 via ecosystem.config.cjs)
+- [ ] `manual` Deploy frontend (served by backend; nginx sample provided)
+- [ ] `manual` Install yt-dlp & FFmpeg on VPS
+- [ ] `manual` Test full flow end-to-end (needs Deepgram + Sumopod keys + binaries)
+- [ ] `manual` Register + list ASP on OKX.AI (A2A) — wallet signature (docs/ASP_REGISTRATION.md)
+- [ ] `manual` Create X post + demo video (script in docs/SUBMISSION.md)
 
 ## Discussion Notes (2026-07-11)
 - Core idea: A2A agent that creates smart clips from YouTube

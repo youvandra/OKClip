@@ -1,0 +1,23 @@
+# OKClip nginx reverse proxy (fill in your domain, then certbot for TLS).
+server {
+    server_name okclip.example.com;
+
+    # Clips can be a few MB; allow generous request/response sizes.
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Clip jobs are async and polled, but negotiation probes can take time.
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    listen 80;
+    # After certbot: listen 443 ssl; + ssl_certificate lines.
+}
