@@ -90,3 +90,11 @@ test("parseMoments splits selected and runner-ups by clipCount", () => {
 test("parseMoments throws on invalid JSON", () => {
   assert.throws(() => parseMoments("not json", transcript, 3));
 });
+
+test("parseMoments handles ```json-fenced and prose-wrapped replies", () => {
+  const moment = { startSec: 1.2, endSec: 1.7, viralScore: 80, confidence: 0.9, reasons: ["x"], caption: "", hashtags: [] };
+  const fenced = "```json\n" + JSON.stringify({ moments: [moment] }) + "\n```";
+  assert.equal(parseMoments(fenced, transcript, 3).selected.length, 1);
+  const prose = "Here you go:\n" + JSON.stringify({ moments: [moment] }) + "\nHope that helps!";
+  assert.equal(parseMoments(prose, transcript, 3).selected.length, 1);
+});

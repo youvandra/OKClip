@@ -184,6 +184,20 @@ function toSelected(m: RawMoment, transcript: Transcript): SelectedMoment {
  * Parse the LLM JSON, clamp values, snap to sentences, and split into the
  * chosen clips (first clipCount) and runner-up candidates.
  */
+/**
+ * Extract a JSON object from an LLM reply that may be wrapped in ```json fences
+ * or surrounded by prose (not all models honor response_format strictly).
+ */
+export function extractJson(raw: string): string {
+  let s = raw.trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence?.[1]) s = fence[1].trim();
+  const first = s.indexOf("{");
+  const last = s.lastIndexOf("}");
+  if (first >= 0 && last > first) s = s.slice(first, last + 1);
+  return s;
+}
+
 export function parseMoments(
   raw: string,
   transcript: Transcript,
@@ -191,7 +205,7 @@ export function parseMoments(
 ): AnalysisResult {
   let parsed: { moments?: RawMoment[] };
   try {
-    parsed = JSON.parse(raw) as { moments?: RawMoment[] };
+    parsed = JSON.parse(extractJson(raw)) as { moments?: RawMoment[] };
   } catch {
     throw new Error("Analyzer returned invalid JSON");
   }
