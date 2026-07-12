@@ -17,10 +17,8 @@ import { join } from "node:path";
 import { buildDeliverySummary, parseJobToBrief } from "./a2a-adapter.js";
 import { config } from "./config.js";
 import { buildDelivery } from "./delivery.js";
-import { probe } from "./downloader.js";
 import { run } from "./exec.js";
 import { logger } from "./logger.js";
-import { negotiate } from "./negotiation.js";
 import { stitch } from "./stitch.js";
 import { runJob } from "./worker.js";
 import type { Brief } from "./types.js";
@@ -29,6 +27,9 @@ const AGENT_ID = process.env.OKCLIP_AGENT_ID ?? "5189";
 const ONCHAINOS = process.env.ONCHAINOS_BIN ?? "onchainos";
 const POLL_MS = Number(process.env.ASP_POLL_MS ?? 15_000);
 const TOKEN_SYMBOL = process.env.ASP_TOKEN_SYMBOL ?? "USDT";
+// Safety gate: when set, only act on tasks from this client agent. Keeps the
+// worker from applying to real clients before deliver is proven end-to-end.
+const ALLOWED_CLIENT = process.env.ASP_ALLOWED_CLIENT ?? "";
 
 type Phase = "applied" | "delivered" | "declined";
 const phases = new Map<string, Phase>();
@@ -54,16 +55,27 @@ async function oc(args: string[]): Promise<any> {
   }
 }
 
-/** Is OKClip the provider on this task (defensive across field names)? */
+/** Is OKClip the provider on this task? active-tasks annotates our own rows. */
 function isOurs(t: any): boolean {
+  if (String(t.myAgentId ?? "") === AGENT_ID && t.myRole === "asp") return true;
   const provider = String(
     t.providerAgentId ?? t.provider ?? t.aspAgentId ?? t.agentId ?? "",
   );
-  return provider === AGENT_ID || t.myRole === "asp" || t.myRole === "provider";
+  return provider === AGENT_ID;
+}
+
+/** The client agent on the other side of the task. */
+function clientOf(t: any): string {
+  return String(t.counterpartyAgentId ?? t.userAgentId ?? "");
 }
 
 function jobIdOf(t: any): string {
   return String(t.jobId ?? t.id ?? t.taskId ?? "");
+}
+
+/** Numeric task status (active-tasks: statusCode is the number; status is text). */
+function statusOf(t: any): number {
+  return Number(t.statusCode ?? t.status);
 }
 
 /** Build a Brief from the task's serviceParams / description. */
@@ -91,26 +103,16 @@ function briefFromTask(t: any): Brief {
  * is treated as success.
  */
 async function handleApply(jobId: string, t: any): Promise<void> {
-  const brief = briefFromTask(t);
-  let meta;
-  try {
-    meta = await probe(brief.url);
-  } catch {
-    /* price on base if probe fails */
-  }
-  const result = negotiate(brief, meta, config.MAX_SOURCE_SECONDS);
-  if (result.kind !== "proposal") {
-    logger.warn({ jobId, result }, "Declining task (not a proposal)");
-    phases.set(jobId, "declined");
-    return;
-  }
-  const price = result.terms.priceUsdt;
+  // active-tasks does not carry serviceParams, so we accept the client's
+  // offered budget rather than re-negotiating by video length here.
+  const price = String(t.tokenAmount ?? "0.5");
+  const symbol = String(t.tokenSymbol ?? TOKEN_SYMBOL);
   try {
     await oc([
       "agent", "apply",
       "--agent-id", AGENT_ID,
       "--token-amount", price,
-      "--token-symbol", TOKEN_SYMBOL,
+      "--token-symbol", symbol,
       jobId,
     ]);
   } catch (err) {
@@ -121,7 +123,7 @@ async function handleApply(jobId: string, t: any): Promise<void> {
     throw err; // transient — leave unset so the next poll retries
   }
   phases.set(jobId, "applied");
-  logger.info({ jobId, price }, "Applied to task");
+  logger.info({ jobId, price, symbol }, "Applied to task");
 }
 
 /**
@@ -132,7 +134,17 @@ async function handleApply(jobId: string, t: any): Promise<void> {
 async function handleDeliver(jobId: string, t: any): Promise<void> {
   let out = produced.get(jobId);
   if (!out) {
-    const brief = briefFromTask(t);
+    let brief: Brief;
+    try {
+      brief = briefFromTask(t);
+    } catch (err) {
+      logger.error(
+        { jobId, err },
+        "Cannot build brief (no serviceParams/url in task); declining",
+      );
+      phases.set(jobId, "declined");
+      return;
+    }
     const job = await runJob(AGENT_ID, brief, {
       clipCount: brief.clipCount,
       aspectRatio: brief.aspectRatio ?? "9:16",
@@ -185,7 +197,8 @@ async function pollOnce(): Promise<void> {
   for (const t of tasks) {
     const jobId = jobIdOf(t);
     if (!jobId || !isOurs(t)) continue;
-    const status = Number(t.status);
+    if (ALLOWED_CLIENT && clientOf(t) !== ALLOWED_CLIENT) continue;
+    const status = statusOf(t);
     const phase = phases.get(jobId);
     try {
       if (status === 0 && phase !== "applied" && phase !== "declined") {
