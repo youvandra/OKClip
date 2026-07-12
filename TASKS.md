@@ -38,9 +38,9 @@
 - [x] `done` Auto caption + hashtag — LLM generate posting metadata
 
 ## Phase 5: Data Moat
-- [ ] `pending` Style memory — per-agent preference profiling
-- [ ] `pending` Preference auto-tuning from request history
-- [ ] `pending` Storage: data/preferences/<agentId>.json
+- [x] `done` Style memory — per-agent preference profiling
+- [x] `done` Preference auto-tuning from request history
+- [x] `done` Storage: data/preferences/<agentId>.json
 
 ## Phase 6: Storage & Delivery
 - [ ] `pending` Set up temp storage (/tmp/okclip/)

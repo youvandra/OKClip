@@ -43,5 +43,6 @@ world (Node/TypeScript) and the txwrap precedent (which shipped and passed revie
 | `SUMOPOD_BASE_URL` | no | OpenAI-compatible base URL for Sumopod |
 | `SUMOPOD_MODEL` | no | Model id (e.g. a deepseek variant) |
 | `STORAGE_DIR` | no (default `/tmp/okclip`) | Temp file root |
+| `PREFERENCES_DIR` | no (default `data/preferences`) | Persistent per-agent style memory |
 | `CLIP_TTL_MS` | no (default 24h) | Clip retention before cleanup |
 | `MAX_SOURCE_SECONDS` | no (default 7200) | Product cap on source length (2 h) |

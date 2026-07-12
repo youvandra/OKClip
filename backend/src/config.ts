@@ -19,6 +19,8 @@ const envSchema = z.object({
   SUMOPOD_MODEL: z.string().default("deepseek-v4-flash"),
 
   STORAGE_DIR: z.string().default("/tmp/okclip"),
+  // Persistent (not tmp) — per-agent style memory survives restarts.
+  PREFERENCES_DIR: z.string().default("data/preferences"),
   CLIP_TTL_MS: z.coerce.number().int().positive().default(24 * 60 * 60 * 1000),
 
   MAX_SOURCE_SECONDS: z.coerce.number().int().positive().default(2 * 60 * 60),
