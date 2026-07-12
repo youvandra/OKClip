@@ -25,17 +25,17 @@
 - [x] `done` Runner-up moments — return candidate timestamps not clipped
 
 ## Phase 4: Video Processing — Polish
-- [ ] `pending` Auto-subtitles — burn Deepgram transcript into video overlay
-- [ ] `pending` Speaker labeling — "Host:", "Guest:" in subtitles (diarization)
-- [ ] `pending` Best-frame thumbnail — frame extraction + text overlay per clip
-- [ ] `pending` Viral score — LLM rates clip 0–95 with reasons
-- [ ] `pending` Multi-clip support — N clips (up to 5) from 1 video
+- [x] `done` Auto-subtitles — burn Deepgram transcript into video overlay
+- [x] `done` Speaker labeling — "Host:", "Guest:" in subtitles (diarization)
+- [x] `done` Best-frame thumbnail — frame extraction per clip (text overlay: future)
+- [x] `done` Viral score — LLM rates clip 0–95 with reasons
+- [x] `done` Multi-clip support — N clips (up to 5) from 1 video
 - [x] `done` Sentence-boundary clipping — never cut mid-word (snapToSentenceBoundaries)
-- [ ] `pending` Speaker-aware moments — understand conversation dynamics
-- [ ] `pending` Hook detection — audio amplitude + scene change for best opener
-- [ ] `pending` Visual change detection — FFmpeg scene detect for slides/demos
-- [ ] `pending` Clip narrative chain — N clips flow as a story
-- [ ] `pending` Auto caption + hashtag — LLM generate posting metadata
+- [x] `done` Speaker-aware moments — understand conversation dynamics
+- [x] `done` Hook detection — scene-change refine for best opener (audio amplitude: future)
+- [x] `done` Visual change detection — FFmpeg scene detect for slides/demos
+- [x] `done` Clip narrative chain — N clips flow as a story
+- [x] `done` Auto caption + hashtag — LLM generate posting metadata
 
 ## Phase 5: Data Moat
 - [ ] `pending` Style memory — per-agent preference profiling

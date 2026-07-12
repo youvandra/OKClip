@@ -1,10 +1,13 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { analyze, segmentTranscript } from "./analyzer.js";
 import { clip } from "./clipper.js";
 import { config } from "./config.js";
 import { download } from "./downloader.js";
+import { detectScenes, refineStart } from "./hooks.js";
 import { logger } from "./logger.js";
+import { buildSrt } from "./subtitles.js";
+import { thumbnail } from "./thumbnail.js";
 import { transcribe } from "./transcriber.js";
 import type {
   ClipEvidence,
@@ -55,9 +58,61 @@ export function toClipResult(
 }
 
 /**
+ * Produce one finished clip: refine the start to a scene cut (hook), burn
+ * speaker-labeled subtitles, cut the segment, and grab a thumbnail. Returns a
+ * decision-grade ClipResult. Shared by the initial run and the revision loop.
+ */
+export async function produceClip(params: {
+  jobId: string;
+  sourcePath: string;
+  workDir: string;
+  transcript: Transcript;
+  moment: SelectedMoment;
+  index: number;
+  suffix: string;
+  aspectRatio: ClipJob["terms"]["aspectRatio"];
+  scenes: number[];
+}): Promise<ClipResult> {
+  const { jobId, sourcePath, workDir, transcript, moment, index, suffix } =
+    params;
+  const startSec = refineStart(moment.startSec, params.scenes);
+  const base = `clip-${index + 1}${suffix}`;
+
+  const srtFile = `${base}.srt`;
+  await writeFile(
+    join(workDir, srtFile),
+    buildSrt(transcript.words, startSec, moment.endSec, transcript.speakerCount),
+  );
+
+  const videoFile = `${base}.mp4`;
+  await clip({
+    input: sourcePath,
+    output: join(workDir, videoFile),
+    startSec,
+    endSec: moment.endSec,
+    aspectRatio: params.aspectRatio,
+    subtitleFile: srtFile,
+    cwd: workDir,
+  });
+
+  const thumbFile = `${base}.jpg`;
+  await thumbnail({
+    input: sourcePath,
+    output: join(workDir, thumbFile),
+    atSec: (startSec + moment.endSec) / 2,
+  });
+
+  return toClipResult(
+    { ...moment, startSec },
+    `/clips/${jobId}/${videoFile}`,
+    `/clips/${jobId}/${thumbFile}`,
+    transcript,
+  );
+}
+
+/**
  * Full clip pipeline for one job:
  * download -> transcribe -> analyze -> clip -> assemble delivery.
- * Thumbnails and subtitle burn arrive in later phases.
  */
 export async function runPipeline(
   job: ClipJob,
@@ -86,26 +141,29 @@ export async function runPipeline(
   }
 
   hooks.setStatus("clipping", { runnerUps });
+
+  // Scene cuts refine clip starts for a stronger hook; degrade gracefully.
+  let scenes: number[] = [];
+  try {
+    scenes = await detectScenes(videoPath);
+  } catch (err) {
+    logger.warn({ jobId: job.id, err }, "Scene detection failed; skipping");
+  }
+
   const results: ClipResult[] = [];
   for (let i = 0; i < moments.length; i++) {
-    const moment = moments[i]!;
-    const filename = `clip-${i + 1}.mp4`;
-    const output = join(workDir, filename);
-    await clip({
-      input: videoPath,
-      output,
-      startSec: moment.startSec,
-      endSec: moment.endSec,
-      aspectRatio: job.terms.aspectRatio,
-    });
-    // Real download/thumbnail URLs are assigned in the storage phase.
     results.push(
-      toClipResult(
-        moment,
-        `/clips/${job.id}/${filename}`,
-        "",
+      await produceClip({
+        jobId: job.id,
+        sourcePath: videoPath,
+        workDir,
         transcript,
-      ),
+        moment: moments[i]!,
+        index: i,
+        suffix: "",
+        aspectRatio: job.terms.aspectRatio,
+        scenes,
+      }),
     );
   }
 
@@ -149,21 +207,17 @@ export async function reviseClips(
     const idx = rejections[k]!.clipIndex;
     const moment = moments[k % moments.length]!;
     if (idx < 0 || idx >= results.length) continue;
-    const filename = `clip-${idx + 1}-r${round}.mp4`;
-    const output = join(workDir, filename);
-    await clip({
-      input: job.sourcePath,
-      output,
-      startSec: moment.startSec,
-      endSec: moment.endSec,
-      aspectRatio: job.terms.aspectRatio,
-    });
-    results[idx] = toClipResult(
+    results[idx] = await produceClip({
+      jobId: job.id,
+      sourcePath: job.sourcePath,
+      workDir,
+      transcript: job.transcriptCache,
       moment,
-      `/clips/${job.id}/${filename}`,
-      "",
-      job.transcriptCache,
-    );
+      index: idx,
+      suffix: `-r${round}`,
+      aspectRatio: job.terms.aspectRatio,
+      scenes: [],
+    });
   }
 
   hooks.setStatus("done", { output: results, revisionsUsed: round });

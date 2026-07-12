@@ -35,3 +35,31 @@ test("buildClipArgs adds a crop filter for 9:16", () => {
   });
   assert.ok(args.includes("-vf"));
 });
+
+test("buildClipArgs chains crop and subtitle burn", () => {
+  const args = buildClipArgs({
+    input: "in.mp4",
+    output: "out.mp4",
+    startSec: 0,
+    endSec: 5,
+    aspectRatio: "9:16",
+    subtitleFile: "clip.srt",
+  });
+  const vf = args[args.indexOf("-vf") + 1]!;
+  assert.match(vf, /crop=/);
+  assert.match(vf, /subtitles=clip\.srt/);
+  assert.ok(vf.includes(",")); // filters chained
+});
+
+test("buildClipArgs burns subtitles even without a crop (16:9)", () => {
+  const args = buildClipArgs({
+    input: "in.mp4",
+    output: "out.mp4",
+    startSec: 0,
+    endSec: 5,
+    aspectRatio: "16:9",
+    subtitleFile: "clip.srt",
+  });
+  const vf = args[args.indexOf("-vf") + 1]!;
+  assert.equal(vf, "subtitles=clip.srt");
+});

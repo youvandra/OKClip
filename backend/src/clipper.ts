@@ -8,6 +8,10 @@ export interface ClipSpec {
   startSec: number;
   endSec: number;
   aspectRatio: AspectRatio;
+  /** Subtitle filename to burn in (relative to `cwd`), optional. */
+  subtitleFile?: string;
+  /** Working directory (so subtitle paths stay simple). */
+  cwd?: string;
 }
 
 /**
@@ -38,8 +42,12 @@ export function buildClipArgs(spec: ClipSpec): string[] {
     "-t",
     duration.toFixed(3),
   ];
-  const filter = aspectFilter(spec.aspectRatio);
-  if (filter) args.push("-vf", filter);
+  // Chain crop and subtitle-burn filters when both apply.
+  const filters: string[] = [];
+  const crop = aspectFilter(spec.aspectRatio);
+  if (crop) filters.push(crop);
+  if (spec.subtitleFile) filters.push(`subtitles=${spec.subtitleFile}`);
+  if (filters.length > 0) args.push("-vf", filters.join(","));
   args.push(
     "-c:v",
     "libx264",
@@ -58,6 +66,7 @@ export function buildClipArgs(spec: ClipSpec): string[] {
 export async function clip(spec: ClipSpec): Promise<string> {
   const res = await run("ffmpeg", buildClipArgs(spec), {
     timeoutMs: 5 * 60_000,
+    cwd: spec.cwd,
   });
   if (res.code !== 0) {
     throw new Error(`ffmpeg failed (${res.code}): ${res.stderr.slice(-500)}`);
