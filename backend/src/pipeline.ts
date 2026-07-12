@@ -6,7 +6,7 @@ import { config } from "./config.js";
 import { download } from "./downloader.js";
 import { detectScenes, refineStart } from "./hooks.js";
 import { logger } from "./logger.js";
-import { buildSrt } from "./subtitles.js";
+import { buildAss } from "./subtitles.js";
 import { thumbnail } from "./thumbnail.js";
 import { transcribe } from "./transcriber.js";
 import type {
@@ -78,10 +78,16 @@ export async function produceClip(params: {
   const startSec = refineStart(moment.startSec, params.scenes);
   const base = `clip-${index + 1}${suffix}`;
 
-  const srtFile = `${base}.srt`;
+  const subFile = `${base}.ass`;
   await writeFile(
-    join(workDir, srtFile),
-    buildSrt(transcript.words, startSec, moment.endSec, transcript.speakerCount),
+    join(workDir, subFile),
+    buildAss(
+      transcript.words,
+      startSec,
+      moment.endSec,
+      transcript.speakerCount,
+      params.aspectRatio,
+    ),
   );
 
   const videoFile = `${base}.mp4`;
@@ -91,7 +97,7 @@ export async function produceClip(params: {
     startSec,
     endSec: moment.endSec,
     aspectRatio: params.aspectRatio,
-    subtitleFile: srtFile,
+    subtitleFile: subFile,
     cwd: workDir,
   });
 
