@@ -42,18 +42,34 @@ function alreadyDone(err: unknown): boolean {
   return m.includes("already") || m.includes("duplicate") || m.includes("exists");
 }
 
-/** Run an onchainos command and parse its JSON stdout. */
+/**
+ * Run an onchainos command and parse its JSON stdout. The CLI signals failures
+ * as `{ ok: false, error }` in stdout (often with exit code 0), so surface that
+ * real error rather than a generic message.
+ */
 async function oc(args: string[]): Promise<any> {
   const res = await run(ONCHAINOS, args, { timeoutMs: 120_000 });
-  if (res.code !== 0) {
-    throw new Error(res.stderr.trim() || `onchainos ${args.join(" ")} failed`);
-  }
+  const body = res.stdout.trim();
+  let json: any;
   try {
-    return JSON.parse(res.stdout.trim() || "{}");
+    json = JSON.parse(body);
   } catch {
-    return {};
+    /* non-JSON output */
   }
+  if (res.code !== 0 || (json && json.ok === false)) {
+    throw new Error(
+      (json && json.error) ||
+        res.stderr.trim() ||
+        body ||
+        `onchainos ${args.join(" ")} failed`,
+    );
+  }
+  return json ?? {};
 }
+
+/** Apply attempts per job, to stop retrying a persistently-failing broadcast. */
+const applyTries = new Map<string, number>();
+const MAX_APPLY_TRIES = 3;
 
 /** Is OKClip the provider on this task? active-tasks annotates our own rows. */
 function isOurs(t: any): boolean {
@@ -120,7 +136,14 @@ async function handleApply(jobId: string, t: any): Promise<void> {
       phases.set(jobId, "applied");
       return;
     }
-    throw err; // transient — leave unset so the next poll retries
+    const tries = (applyTries.get(jobId) ?? 0) + 1;
+    applyTries.set(jobId, tries);
+    if (tries >= MAX_APPLY_TRIES) {
+      logger.error({ jobId, tries, err }, "Apply keeps failing; giving up");
+      phases.set(jobId, "declined");
+      return;
+    }
+    throw err; // retry a couple times, then stop
   }
   phases.set(jobId, "applied");
   logger.info({ jobId, price, symbol }, "Applied to task");
