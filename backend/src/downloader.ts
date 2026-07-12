@@ -10,6 +10,7 @@ import { logger } from "./logger.js";
  */
 function ytdlpBase(): string[] {
   const base = ["--no-warnings"];
+  if (config.YTDLP_PROXY) base.push("--proxy", config.YTDLP_PROXY);
   if (config.YTDLP_COOKIES) base.push("--cookies", config.YTDLP_COOKIES);
   return base;
 }
