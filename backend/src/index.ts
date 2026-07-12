@@ -17,6 +17,7 @@ const queue = new JobQueue(async (job) => {
 });
 
 const app = express();
+app.set("trust proxy", true); // real client IP from nginx X-Forwarded-For
 app.use(express.json({ limit: "1mb" }));
 
 app.get("/health", (_req, res) => {

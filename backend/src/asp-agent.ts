@@ -21,6 +21,7 @@ import { probe } from "./downloader.js";
 import { run } from "./exec.js";
 import { logger } from "./logger.js";
 import { negotiate } from "./negotiation.js";
+import { stitch } from "./stitch.js";
 import { runJob } from "./worker.js";
 import type { Brief } from "./types.js";
 
@@ -29,8 +30,16 @@ const ONCHAINOS = process.env.ONCHAINOS_BIN ?? "onchainos";
 const POLL_MS = Number(process.env.ASP_POLL_MS ?? 15_000);
 const TOKEN_SYMBOL = process.env.ASP_TOKEN_SYMBOL ?? "USDT";
 
-type Phase = "applying" | "applied" | "working" | "delivered" | "failed";
+type Phase = "applied" | "delivered" | "declined";
 const phases = new Map<string, Phase>();
+/** Clips already produced for a job, so deliver retries don't re-run the engine. */
+const produced = new Map<string, { file: string; text: string }>();
+
+/** Does an error indicate the action already happened (idempotent no-op)? */
+function alreadyDone(err: unknown): boolean {
+  const m = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return m.includes("already") || m.includes("duplicate") || m.includes("exists");
+}
 
 /** Run an onchainos command and parse its JSON stdout. */
 async function oc(args: string[]): Promise<any> {
@@ -76,9 +85,12 @@ function briefFromTask(t: any): Brief {
   });
 }
 
-/** Accept a newly-created job at a negotiated price. */
+/**
+ * Accept a newly-created job at a negotiated price. On a transient error the
+ * phase is left unset so the next poll retries; a genuine "already applied"
+ * is treated as success.
+ */
 async function handleApply(jobId: string, t: any): Promise<void> {
-  phases.set(jobId, "applying");
   const brief = briefFromTask(t);
   let meta;
   try {
@@ -89,62 +101,82 @@ async function handleApply(jobId: string, t: any): Promise<void> {
   const result = negotiate(brief, meta, config.MAX_SOURCE_SECONDS);
   if (result.kind !== "proposal") {
     logger.warn({ jobId, result }, "Declining task (not a proposal)");
-    phases.set(jobId, "failed");
+    phases.set(jobId, "declined");
     return;
   }
   const price = result.terms.priceUsdt;
-  await oc([
-    "agent",
-    "apply",
-    "--agent-id",
-    AGENT_ID,
-    "--token-amount",
-    price,
-    "--token-symbol",
-    TOKEN_SYMBOL,
-    jobId,
-  ]);
+  try {
+    await oc([
+      "agent", "apply",
+      "--agent-id", AGENT_ID,
+      "--token-amount", price,
+      "--token-symbol", TOKEN_SYMBOL,
+      jobId,
+    ]);
+  } catch (err) {
+    if (alreadyDone(err)) {
+      phases.set(jobId, "applied");
+      return;
+    }
+    throw err; // transient — leave unset so the next poll retries
+  }
   phases.set(jobId, "applied");
   logger.info({ jobId, price }, "Applied to task");
 }
 
-/** Produce clips for an accepted job and deliver them. */
+/**
+ * Produce clips for an accepted job (once, cached) and deliver them. Multiple
+ * clips are stitched into a single reel since `deliver` attaches one file.
+ * Deliver retries reuse the cached output instead of re-running the engine.
+ */
 async function handleDeliver(jobId: string, t: any): Promise<void> {
-  phases.set(jobId, "working");
-  const brief = briefFromTask(t);
-  const job = await runJob(AGENT_ID, brief, {
-    clipCount: brief.clipCount,
-    aspectRatio: brief.aspectRatio ?? "9:16",
-    maxClipSeconds: brief.maxClipSeconds ?? 60,
-    priceUsdt: "0",
-    revisionRounds: 1,
-  });
-  if (job.status === "failed" || !job.output?.length) {
-    logger.error({ jobId, error: job.error }, "Clip job failed");
-    phases.set(jobId, "failed");
-    return;
+  let out = produced.get(jobId);
+  if (!out) {
+    const brief = briefFromTask(t);
+    const job = await runJob(AGENT_ID, brief, {
+      clipCount: brief.clipCount,
+      aspectRatio: brief.aspectRatio ?? "9:16",
+      maxClipSeconds: brief.maxClipSeconds ?? 60,
+      priceUsdt: "0",
+      revisionRounds: 1,
+    });
+    if (job.status === "failed" || !job.output?.length) {
+      logger.error({ jobId, error: job.error }, "Clip job failed");
+      phases.set(jobId, "declined");
+      return;
+    }
+    const workDir = join(config.STORAGE_DIR, job.id);
+    const files = job.output.map((c) =>
+      join(workDir, c.downloadUrl.split("/").pop()!),
+    );
+    let file = files[0]!;
+    if (files.length > 1) {
+      try {
+        file = await stitch(files, workDir, join(workDir, "reel.mp4"));
+      } catch (err) {
+        logger.warn({ jobId, err }, "Stitch failed; delivering first clip");
+      }
+    }
+    out = { file, text: buildDeliverySummary(buildDelivery(job)) };
+    produced.set(jobId, out);
   }
-  const delivery = buildDelivery(job);
-  const summary = buildDeliverySummary(delivery);
-  const firstClip = job.output[0]!;
-  const filePath = join(
-    config.STORAGE_DIR,
-    job.id,
-    firstClip.downloadUrl.split("/").pop()!,
-  );
-  await oc([
-    "agent",
-    "deliver",
-    "--agent-id",
-    AGENT_ID,
-    "--deliverable-text",
-    summary,
-    "--file",
-    filePath,
-    jobId,
-  ]);
+  try {
+    await oc([
+      "agent", "deliver",
+      "--agent-id", AGENT_ID,
+      "--deliverable-text", out.text,
+      "--file", out.file,
+      jobId,
+    ]);
+  } catch (err) {
+    if (alreadyDone(err)) {
+      phases.set(jobId, "delivered");
+      return;
+    }
+    throw err; // transient — retry deliver next poll (engine output cached)
+  }
   phases.set(jobId, "delivered");
-  logger.info({ jobId, clips: job.output.length }, "Delivered clips");
+  logger.info({ jobId }, "Delivered");
 }
 
 async function pollOnce(): Promise<void> {
@@ -156,13 +188,9 @@ async function pollOnce(): Promise<void> {
     const status = Number(t.status);
     const phase = phases.get(jobId);
     try {
-      if (status === 0 && phase !== "applied" && phase !== "applying") {
+      if (status === 0 && phase !== "applied" && phase !== "declined") {
         await handleApply(jobId, t);
-      } else if (
-        status === 1 &&
-        phase !== "delivered" &&
-        phase !== "working"
-      ) {
+      } else if (status === 1 && phase !== "delivered" && phase !== "declined") {
         await handleDeliver(jobId, t);
       }
     } catch (err) {

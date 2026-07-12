@@ -32,6 +32,25 @@ const rejectionSchema = z.object({
 });
 
 /**
+ * Cheap per-IP limiter for the expensive job endpoint — a public demo surface
+ * that would otherwise let anyone burn ASR credits. Sliding one-hour window.
+ */
+const JOBS_PER_HOUR = Number(process.env.JOBS_PER_HOUR ?? 5);
+const jobHits = new Map<string, number[]>();
+function jobRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const windowMs = 60 * 60 * 1000;
+  const hits = (jobHits.get(ip) ?? []).filter((t) => now - t < windowMs);
+  if (hits.length >= JOBS_PER_HOUR) {
+    jobHits.set(ip, hits);
+    return true;
+  }
+  hits.push(now);
+  jobHits.set(ip, hits);
+  return false;
+}
+
+/**
  * The internal clip-work API — the engine, not the payment protocol. Used by
  * the frontend demo and by the onchainos ASP agent (which owns the OKX A2A
  * escrow/state machine and calls this to do the actual clipping).
@@ -62,6 +81,11 @@ export function createJobsRouter(queue: JobQueue): Router {
 
   // Start a clip job.
   router.post("/jobs", (req, res) => {
+    if (jobRateLimited(req.ip ?? "unknown")) {
+      return res
+        .status(429)
+        .json({ error: `rate limit: max ${JOBS_PER_HOUR} jobs/hour` });
+    }
     const parsed = z
       .object({
         agentId: z.string().min(1),
