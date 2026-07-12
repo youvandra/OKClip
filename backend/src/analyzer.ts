@@ -85,6 +85,7 @@ export function buildAnalysisPrompt(
 
   const user = [
     `Brief: "${brief.prompt}"`,
+    `Transcript language: ${transcript.language} — write caption and hashtags in this language.`,
     `Clips wanted: ${brief.clipCount} (also include up to 3 extra strong candidates as runner-ups, ordered best-first)`,
     `Max clip length: ${brief.maxClipSeconds ?? 60}s`,
     "",

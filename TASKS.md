@@ -61,10 +61,10 @@
 - [x] `done` Build clip preview with metadata (viral score, reasons, speakers, thumbnail)
 
 ## Phase 9: Expansion (if time)
-- [ ] `pending` Vertical reformat — 16:9 → 9:16 with face/subject tracking
-- [ ] `pending` Clip stitching — combine N clips into 1 highlight reel
-- [ ] `pending` Playlist batch — YouTube playlist → process all videos
-- [ ] `pending` Multi-language — auto-detect (Deepgram) → language-aware LLM prompt
+- [x] `done` Vertical reformat — 16:9 → 9:16 center crop (face/subject tracking: future)
+- [x] `done` Clip stitching — combine N clips into 1 highlight reel
+- [x] `done` Playlist batch — YouTube playlist → process all videos
+- [x] `done` Multi-language — auto-detect (Deepgram) → language-aware LLM prompt
 
 ## Phase 10: Polish & Deploy
 - [ ] `pending` Deploy backend to VPS

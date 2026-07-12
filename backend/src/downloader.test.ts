@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { classifyError, parseMeta } from "./downloader.js";
+import { classifyError, parseMeta, parsePlaylist } from "./downloader.js";
 
 test("parseMeta normalizes yt-dlp json", () => {
   const meta = parseMeta(
@@ -21,6 +21,16 @@ test("parseMeta tolerates missing fields", () => {
   const meta = parseMeta("{}");
   assert.equal(meta.id, "unknown");
   assert.equal(meta.durationSec, 0);
+});
+
+test("parsePlaylist reads flat-playlist JSON lines", () => {
+  const stdout =
+    '{"webpage_url":"https://youtu.be/a","title":"One"}\n{"id":"b","title":"Two"}\n';
+  const entries = parsePlaylist(stdout);
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0]?.url, "https://youtu.be/a");
+  assert.equal(entries[1]?.url, "b");
+  assert.equal(entries[1]?.title, "Two");
 });
 
 test("classifyError maps known yt-dlp failures", () => {

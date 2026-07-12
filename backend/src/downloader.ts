@@ -57,6 +57,45 @@ export function parseMeta(json: string): VideoMeta {
   };
 }
 
+export interface PlaylistEntry {
+  url: string;
+  title: string;
+}
+
+/** Parse yt-dlp `--flat-playlist --dump-json` JSON-lines into entries. */
+export function parsePlaylist(stdout: string): PlaylistEntry[] {
+  return stdout
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const j = JSON.parse(line) as {
+        url?: string;
+        webpage_url?: string;
+        id?: string;
+        title?: string;
+      };
+      return {
+        url: j.webpage_url ?? j.url ?? j.id ?? "",
+        title: j.title ?? "Untitled",
+      };
+    })
+    .filter((e) => e.url);
+}
+
+/** List the videos in a YouTube playlist without downloading them. */
+export async function probePlaylist(url: string): Promise<PlaylistEntry[]> {
+  const res = await run(
+    "yt-dlp",
+    ["--flat-playlist", "--dump-json", "--no-warnings", url],
+    { timeoutMs: 60_000 },
+  );
+  if (res.code !== 0) {
+    throw new DownloadError(res.stderr.trim(), classifyError(res.stderr));
+  }
+  return parsePlaylist(res.stdout);
+}
+
 /** Fetch metadata without downloading (used during negotiation for pricing). */
 export async function probe(url: string): Promise<VideoMeta> {
   const res = await run(
