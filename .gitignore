@@ -8,3 +8,7 @@ coverage/
 /tmp/
 backend/data/
 docs/
+
+# local-only docs/notes — keep only README on GitHub
+*.md
+!README.md
