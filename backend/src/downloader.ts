@@ -143,7 +143,9 @@ export async function download(url: string, destDir: string): Promise<string> {
       "after_move:filepath",
       url,
     ],
-    { timeoutMs: 10 * 60_000 },
+    // Residential proxies are slow (~100 KiB/s), and OKClip's real inputs are
+    // long-form (podcasts/talks), so allow a generous download window.
+    { timeoutMs: 30 * 60_000 },
   );
   if (res.code !== 0) {
     throw new DownloadError(res.stderr.trim(), classifyError(res.stderr));
