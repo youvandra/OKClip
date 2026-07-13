@@ -1,4 +1,4 @@
-import { mkdtempSync, unlinkSync, rmdirSync } from "node:fs";
+import { mkdtempSync, unlinkSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { run } from "./exec.js";
@@ -109,11 +109,10 @@ export async function smartThumbnail(spec: ClipThumbnailSpec): Promise<string> {
       ],
       { timeoutMs: 30_000 },
     );
-    try { require("node:fs").unlinkSync(tmpOut); } catch { /* ignore */ }
+    try { unlinkSync(tmpOut); } catch { /* ignore */ }
     if (res.code !== 0) {
-      // Fall back to raw frame if drawtext fails
       logger.warn({ err: res.stderr.slice(-200) }, "Text overlay failed; using raw frame");
-      await require("node:fs").promises.rename(tmpOut, out);
+      try { renameSync(tmpOut, out); } catch { /* ignore */ }
     }
     return out;
   }
