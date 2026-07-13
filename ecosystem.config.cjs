@@ -31,7 +31,7 @@ module.exports = {
         NODE_ENV: "production",
         ONCHAINOS_BIN: "/home/ubuntu/.local/bin/onchainos",
         OKCLIP_AGENT_ID: "5189",
-        ASP_HEALTH_PORT: "3002",
+        ASP_HEALTH_PORT: "3003",
         // ASP_ALLOWED_CLIENT is intentionally unset — the agent serves all
         // clients. Set to an agent ID only during local testing.
         // ASP_ALLOWED_CLIENT: "",
