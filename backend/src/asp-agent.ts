@@ -19,8 +19,9 @@
  */
 import { createServer } from "node:http";
 import { argv } from "node:process";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { buildDeliverySummary } from "./a2a-adapter.js";
 import {
   alreadyDone,
@@ -57,6 +58,40 @@ const produced = new Map<string, { file: string; text: string }>();
 const applyTries = new Map<string, number>();
 /** Jobs whose deliver is running in the background right now. */
 const inFlight = new Set<string>();
+
+const STATE_FILE = join(
+  process.env.ASP_STATE_DIR ?? "/tmp/okclip",
+  "asp-state.json",
+);
+
+/** Persist declined phases so restarts don't re-apply to dead tasks. */
+function loadState() {
+  try {
+    if (existsSync(STATE_FILE)) {
+      const data = JSON.parse(readFileSync(STATE_FILE, "utf8"));
+      for (const [id, phase] of Object.entries(data.phases ?? {})) {
+        phases.set(id, phase as Phase);
+      }
+      for (const [id, tries] of Object.entries(data.applyTries ?? {})) {
+        applyTries.set(id, tries as number);
+      }
+      logger.info({ phases: Object.keys(data.phases ?? {}).length }, "Restored ASP state");
+    }
+  } catch { /* first run, no state yet */ }
+}
+
+function saveState() {
+  try {
+    const dir = dirname(STATE_FILE);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(STATE_FILE, JSON.stringify({
+      phases: Object.fromEntries(phases),
+      applyTries: Object.fromEntries(applyTries),
+    }));
+  } catch { /* ignore */ }
+}
+
+// Call saveState after state mutations in handleApply and handleDeliver.
 
 /**
  * Run an onchainos command. The CLI signals failures as `{ ok:false, error }`
@@ -272,10 +307,12 @@ async function pollOnce(): Promise<void> {
       produced.delete(jobId);
     }
   }
+  saveState();
 }
 
 async function main(): Promise<void> {
   const startTime = Date.now();
+  loadState();
 
   logger.info(
     { AGENT_ID, POLL_MS, MAX_CONCURRENT, gated: ALLOWED_CLIENT || "off" },
