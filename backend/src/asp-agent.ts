@@ -216,6 +216,11 @@ async function pollOnce(): Promise<void> {
     }
     const status = statusOf(t);
 
+    // Applied but on-chain not yet confirmed — don't re-apply.
+    if (phase === "applied" && status === STATUS.created) {
+      continue;
+    }
+
     if (status === STATUS.created) {
       try {
         await handleApply(jobId, t);
