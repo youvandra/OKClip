@@ -9,7 +9,7 @@ BASE="${BASE:-http://localhost:3001}"
 echo "1. health"
 curl -fsS "$BASE/health" | grep -q '"status":"ok"' && echo "   ok"
 
-echo "2. negotiate (probe may fail without yt-dlp; base price still returned)"
+echo "2. negotiate (probe may fail; base price still returned)"
 curl -fsS -X POST "$BASE/api/negotiate" \
   -H 'Content-Type: application/json' \
   -d '{"agentId":"smoke","brief":{"url":"https://youtu.be/dQw4w9WgXcQ","prompt":"3 tiktok clips","clipCount":3}}' \

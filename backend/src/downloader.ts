@@ -1,6 +1,4 @@
-import { join } from "node:path";
 import { downloadViaLoader } from "./loader-downloader.js";
-import { logger } from "./logger.js";
 
 export interface VideoMeta {
   id: string;
@@ -54,10 +52,6 @@ export async function probe(url: string): Promise<VideoMeta> {
     return { id, title: "Untitled", durationSec: 0 };
   }
 }
-
-// Stub — playlist support removed with yt-dlp.
-export interface PlaylistEntry { url: string; title: string; }
-export async function probePlaylist(_url: string): Promise<PlaylistEntry[]> { return []; }
 
 /**
  * Download a video into `destDir`. Returns the file path.

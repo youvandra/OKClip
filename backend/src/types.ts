@@ -114,13 +114,11 @@ export interface RunnerUpMoment {
 
 /** Lifecycle of a clip job. */
 export type JobStatus =
-  | "negotiating"
   | "queued"
   | "downloading"
   | "transcribing"
   | "analyzing"
   | "clipping"
-  | "delivering"
   | "revising"
   | "done"
   | "failed";

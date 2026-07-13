@@ -5,7 +5,7 @@ export function buildDelivery(job: ClipJob): Delivery {
   const clips = job.output ?? [];
   const roundsLeft = job.terms.revisionRounds - job.revisionsUsed;
   const message =
-    job.status === "done" || job.status === "delivering"
+    job.status === "done"
       ? `${clips.length} clip(s) ready. Each carries a viral score, the reasons it was picked, and an evidence block. Reject a clip with feedback to revise (${roundsLeft} revision round(s) left).`
       : job.status === "failed"
         ? `Job failed: ${job.error ?? "unknown error"}`
@@ -24,6 +24,6 @@ export function buildDelivery(job: ClipJob): Delivery {
 export function canRevise(job: ClipJob): boolean {
   return (
     job.revisionsUsed < job.terms.revisionRounds &&
-    (job.status === "done" || job.status === "delivering")
+    job.status === "done"
   );
 }

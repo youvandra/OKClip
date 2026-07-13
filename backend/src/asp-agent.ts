@@ -14,7 +14,7 @@
  *   >=5         -> terminal; clean up
  *
  * Requires: onchainos CLI on PATH + a logged-in wallet + a reachable A2A
- * gateway (okx-a2a doctor green), plus the pipeline deps (yt-dlp, ffmpeg,
+ * gateway (okx-a2a doctor green), plus the pipeline deps (ffmpeg,
  * Deepgram/Sumopod keys).
  */
 import { createServer } from "node:http";

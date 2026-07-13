@@ -17,7 +17,7 @@ Built for the OKX.AI Genesis Hackathon. Sibling project to
 | **Protocol** | OKX onchainos agent (CLI + XMTP state machine); escrow is gas-free via the platform paymaster |
 | **Work engine** | this repo — invoked by the ASP agent on `job_accepted` |
 | **Human surface** | `/` — Alpine + Tailwind SPA |
-| **Stack** | Node 20 · TypeScript · Express 5 · Deepgram · Sumopod LLM · yt-dlp · FFmpeg |
+| **Stack** | Node 20 · TypeScript · Express 5 · Deepgram · Sumopod LLM · FFmpeg |
 
 ---
 
@@ -112,7 +112,7 @@ so an agent can swap a pick without a full re-process.
 ## Pipeline
 
 ```
-yt-dlp download (720p) -> Deepgram transcribe + word-level + diarize
+3rd-party download (720p) -> Deepgram transcribe + word-level + diarize
   -> LLM select moments (+ score + reasons + runner-ups)
   -> scene-cut refine (hook) -> FFmpeg cut + burn speaker-labeled subtitles
   -> thumbnail -> decision-grade delivery
@@ -145,12 +145,12 @@ negotiation.
 ### Prerequisites
 
 - **Node.js 20+**
-- **`yt-dlp`** and **`ffmpeg`** on `PATH`
+- **`ffmpeg`** on `PATH`
 - A **Deepgram** API key and a **Sumopod** (OpenAI-compatible) API key
 
 ```bash
 # macOS
-brew install yt-dlp ffmpeg
+brew install ffmpeg
 ```
 
 ### Run
@@ -196,7 +196,6 @@ building, playlist parsing, and the A2A job adapter.
 | `SUMOPOD_API_KEY` | for analysis | — | LLM moment selection / scoring / captions |
 | `SUMOPOD_BASE_URL` | no | `https://ai.sumopod.com/v1` | OpenAI-compatible base URL |
 | `SUMOPOD_MODEL` | no | `deepseek-v4-flash` | Model id |
-| `YTDLP_COOKIES` | on a VPS | — | Path to a `cookies.txt`; see below |
 | `STORAGE_DIR` | no | `/tmp/okclip` | Temp clip storage |
 | `PREFERENCES_DIR` | no | `data/preferences` | Persistent per-agent style memory |
 | `CLIP_TTL_MS` | no | `86400000` | Clip retention before cleanup (24 h) |
@@ -204,22 +203,6 @@ building, playlist parsing, and the A2A job adapter.
 
 The server boots without the API keys — `/health` reports which features are
 enabled — so discovery and negotiation always work.
-
-### Downloading YouTube from a server
-
-From a datacenter IP, YouTube blocks yt-dlp unless it's authenticated and can
-solve its challenges. Running on a VPS therefore needs three pieces together:
-
-1. **Cookies** — a Netscape `cookies.txt` from a logged-in session, referenced by
-   `YTDLP_COOKIES` (passes the "confirm you're not a bot" gate). Cookies expire —
-   refresh them when downloads start failing.
-2. **A PO-token provider** — the [bgutil](https://github.com/Brainicism/bgutil-ytdlp-pot-provider)
-   provider + its yt-dlp plugin (supplies the GVS PO token YouTube now requires).
-3. **A JS runtime** — [Deno](https://deno.com) + the `yt-dlp-ejs` package to solve
-   the `n` signature challenge (Node is not supported by yt-dlp's EJS).
-
-On a normal desktop with a logged-in browser, `yt-dlp` usually handles this
-automatically; the three-piece setup is specific to headless servers.
 
 ---
 
@@ -234,7 +217,7 @@ backend/src/
   jobs.ts         internal work API (negotiate / jobs / revise)
   negotiation.ts  pricing, aspect inference, decline/clarify
   pipeline.ts     download -> transcribe -> analyze -> clip orchestration
-  downloader.ts   yt-dlp (probe, download, playlist) + cookie support
+  downloader.ts   Video download via loader.to API + oEmbed probe
   transcriber.ts  Deepgram nova-2 (transcript + word-level + diarization)
   analyzer.ts     LLM moment selection, scoring, sentence-boundary snapping
   clipper.ts      ffmpeg cut + aspect crop + subtitle burn
@@ -257,7 +240,7 @@ frontend/
 
 Node backend under **pm2** behind **nginx** (TLS via Let's Encrypt) on a VPS.
 See `ecosystem.config.cjs` (single instance — the queue and style memory are
-in-process). Install `yt-dlp` + `ffmpeg` and the YouTube download stack above,
+in-process). Install `ffmpeg`, then:
 then set the API keys in `backend/.env`.
 
 ---
