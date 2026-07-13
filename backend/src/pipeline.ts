@@ -23,6 +23,31 @@ export interface PipelineHooks {
   setStatus(status: JobStatus, patch?: Partial<ClipJob>): void;
 }
 
+/** Retry `fn` a few times with exponential backoff. Only retries on transient errors. */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries = 2,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxRetries) {
+        const delay = 2 ** attempt * 2000;
+        logger.warn(
+          { label, attempt: attempt + 1, delayMs: delay, err },
+          "Transient failure — retrying",
+        );
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 /** Honesty block attached to every clip (see PLAN honesty rules). */
 export function buildEvidence(transcript: Transcript): ClipEvidence {
   return {
@@ -104,10 +129,12 @@ export async function produceClip(params: {
   });
 
   const thumbFile = `${base}.jpg`;
+  // Sample at 25% of the clip — closer to the hook than the midpoint.
+  const thumbSec = startSec + (moment.endSec - startSec) * 0.25;
   await thumbnail({
     input: sourcePath,
     output: join(workDir, thumbFile),
-    atSec: (startSec + moment.endSec) / 2,
+    atSec: thumbSec,
   });
 
   return toClipResult(
@@ -138,7 +165,10 @@ export async function runPipeline(
   hooks.setStatus("downloading", { sourcePath: videoPath });
 
   hooks.setStatus("transcribing");
-  const transcript = await transcribe(videoPath);
+  const transcript = await withRetry(
+    () => transcribe(videoPath),
+    "transcribe",
+  );
 
   if (transcript.durationSec > config.MAX_SOURCE_SECONDS) {
     throw new Error(
@@ -147,7 +177,10 @@ export async function runPipeline(
   }
 
   hooks.setStatus("analyzing", { transcriptCache: transcript });
-  const { selected: moments, runnerUps } = await analyze(transcript, job.brief);
+  const { selected: moments, runnerUps } = await withRetry(
+    () => analyze(transcript, job.brief),
+    "analyze",
+  );
   if (moments.length === 0) {
     throw new Error("No suitable moments found for the brief");
   }
