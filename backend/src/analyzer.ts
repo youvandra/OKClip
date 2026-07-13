@@ -239,6 +239,8 @@ export async function analyze(
   const client = new OpenAI({
     apiKey: config.SUMOPOD_API_KEY,
     baseURL: config.SUMOPOD_BASE_URL,
+    timeout: 120_000,
+    maxRetries: 1,
   });
 
   const { system, user } = buildAnalysisPrompt(transcript, brief);

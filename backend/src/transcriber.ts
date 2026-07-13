@@ -62,13 +62,21 @@ export async function transcribe(filePath: string): Promise<Transcript> {
   const deepgram = createClient(config.DEEPGRAM_API_KEY);
   const buffer = await readFile(filePath);
 
-  const { result, error } =
-    await deepgram.listen.prerecorded.transcribeFile(buffer, {
+  const THIRTY_MINUTES = 30 * 60 * 1000;
+  const { result, error } = await Promise.race([
+    deepgram.listen.prerecorded.transcribeFile(buffer, {
       model: "nova-2",
       smart_format: true,
       punctuate: true,
       diarize: true,
-    });
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Deepgram transcription timed out")),
+        THIRTY_MINUTES,
+      ),
+    ),
+  ]) as Awaited<ReturnType<typeof deepgram.listen.prerecorded.transcribeFile>>;
 
   if (error) throw new Error(`Deepgram error: ${error.message ?? error}`);
 

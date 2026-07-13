@@ -272,9 +272,13 @@ async function main(): Promise<void> {
           uptimeMs: Date.now() - startTime,
         }),
       );
-    }).listen(healthPort, "127.0.0.1", () => {
-      logger.info({ healthPort }, "ASP health endpoint listening");
-    });
+    })
+      .on("error", (err) => {
+        logger.warn({ healthPort, err: err.message }, "Health endpoint failed to bind");
+      })
+      .listen(healthPort, "127.0.0.1", () => {
+        logger.info({ healthPort }, "ASP health endpoint listening");
+      });
   }
 
   for (;;) {
