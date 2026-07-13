@@ -96,22 +96,47 @@ function fmt(sec: number): string {
  * over XMTP alongside the clip file attachments.
  */
 export function buildDeliverySummary(delivery: Delivery): string {
-  if (delivery.clips.length === 0) {
-    return delivery.message;
+  if (delivery.status === "failed") {
+    return [
+      "OKClip could not process your request.",
+      `Reason: ${delivery.message}`,
+      "Task declined. Please check the YouTube URL and try again.",
+    ].join("\n");
   }
-  const lines = [`OKClip delivered ${delivery.clips.length} clip(s):`, ""];
-  delivery.clips.forEach((c, i) => {
-    const range = `${fmt(c.timestamp.startSec)}-${fmt(c.timestamp.endSec)}`;
-    lines.push(
-      `${i + 1}. [${range}] viral ${c.viralScore}/95 | ${c.durationSec}s | ${c.hashtags?.join(" ") ?? ""}`,
-    );
-    if (c.caption) lines.push(`   ${c.caption}`);
-    if (c.reasons.length) lines.push(`   why: ${c.reasons.join("; ")}`);
-  });
-  lines.push(
+  if (delivery.clips.length === 0) {
+    return [
+      "OKClip processed the video but found no suitable moments.",
+      `Reason: ${delivery.message}`,
+      "Try a different prompt or a different source video.",
+    ].join("\n");
+  }
+
+  const lines = [
+    `OKClip → ${delivery.clips.length} clip(s) ready.`,
     "",
-    "Each clip includes: burned-in subtitles, thumbnail, download link.",
-    `Expected processing time: ${delivery.estimatedSec ?? "60-180"} seconds.`,
+  ];
+
+  if (delivery.estimatedSec) {
+    lines.push(`⏱ Processed in ~${Math.round(delivery.estimatedSec / 60)} minute(s)`);
+    lines.push("");
+  }
+
+  delivery.clips.forEach((c, i) => {
+    const range = `${fmt(c.timestamp.startSec)}–${fmt(c.timestamp.endSec)}`;
+    lines.push(
+      `${i + 1}. [${range}] ${c.durationSec}s | viral ${c.viralScore}/95 | conf ${c.confidence}`,
+    );
+    if (c.caption) lines.push(`   "${c.caption}"`);
+    if (c.reasons.length) lines.push(`   Why: ${c.reasons.join("; ")}`);
+    if (c.hashtags?.length) lines.push(`   ${c.hashtags.join(" ")}`);
+    lines.push("");
+  });
+
+  lines.push(
+    "Each clip has burned-in subtitles + thumbnail.",
+    "Revise? Reject a clip with feedback → re-cut from cache.",
+    "Approve? Confirm delivery → escrow released on X Layer.",
   );
+
   return lines.join("\n");
 }

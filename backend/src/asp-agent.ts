@@ -140,8 +140,30 @@ async function handleDeliver(jobId: string, t: any): Promise<void> {
       revisionRounds: 1,
     });
     if (job.status === "failed" || !job.output?.length) {
+      const reason = job.error ?? "Clip engine produced no output";
       logger.error({ jobId, error: job.error }, "Clip job failed");
       phases.set(jobId, "declined");
+      // Deliver a decline message so the counterparty knows why.
+      out = {
+        file: "/dev/null",
+        text: [
+          "OKClip could not process your request.",
+          `Reason: ${reason}`,
+          "The task has been declined.",
+        ].join("\n"),
+      };
+      produced.set(jobId, out);
+      // Deliver the decline message, then stop.
+      try {
+        await oc([
+          "agent", "deliver",
+          "--agent-id", AGENT_ID,
+          "--deliverable-text", out.text,
+          jobId,
+        ]);
+      } catch {
+        // Decline delivery may fail (e.g., status not accepted) — that's OK.
+      }
       return;
     }
     const workDir = join(config.STORAGE_DIR, job.id);
@@ -156,7 +178,10 @@ async function handleDeliver(jobId: string, t: any): Promise<void> {
         logger.warn({ jobId, err }, "Stitch failed; delivering first clip");
       }
     }
-    out = { file, text: buildDeliverySummary(buildDelivery(job)) };
+    out = {
+      file,
+      text: buildDeliverySummary(buildDelivery(job)),
+    };
     produced.set(jobId, out);
   }
   try {

@@ -17,6 +17,9 @@ export function buildDelivery(job: ClipJob): Delivery {
     clips,
     runnerUps: job.runnerUps ?? [],
     message,
+    estimatedSec: job.startedAt
+      ? Math.round((Date.now() - job.startedAt) / 1000)
+      : undefined,
   };
 }
 

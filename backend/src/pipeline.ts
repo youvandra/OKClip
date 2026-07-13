@@ -157,6 +157,7 @@ export async function runPipeline(
 ): Promise<void> {
   const workDir = join(config.STORAGE_DIR, job.id);
   await mkdir(workDir, { recursive: true });
+  job.startedAt = Date.now();
 
   hooks.setStatus("downloading");
   const videoPath = await download(

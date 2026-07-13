@@ -146,6 +146,8 @@ export interface ClipJob {
   sourcePath?: string;
   /** Revision rounds consumed so far. */
   revisionsUsed: number;
+  /** Pipeline start time (ms epoch), used for ETA. */
+  startedAt?: number;
   error?: string;
   createdAt: number;
   updatedAt: number;

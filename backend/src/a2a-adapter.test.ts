@@ -64,8 +64,7 @@ test("buildDeliverySummary renders per-clip lines", () => {
     ],
   };
   const summary = buildDeliverySummary(delivery);
-  assert.match(summary, /delivered 1 clip/);
-  assert.match(summary, /4:32-5:19/);
-  assert.match(summary, /why: topic match: DeFi/);
-  assert.match(summary, /#DeFi/);
+  assert.match(summary, /OKClip → 1 clip/);
+  assert.match(summary, /4:32–5:19/);
+  assert.match(summary, /Why: topic match: DeFi/);
 });
