@@ -1,4 +1,4 @@
-import type { AspectRatio, TranscriptWord } from "./types.js";
+import type { AspectRatio, SubtitleStyle, TranscriptWord } from "./types.js";
 
 /** Format seconds as an SRT timestamp (hh:mm:ss,mmm). */
 export function srtTime(sec: number): string {
@@ -125,10 +125,11 @@ function assText(s: string): string {
 }
 
 /**
- * Build a styled ASS subtitle track — big bold white text with a thick outline
- * and drop shadow, centred low in frame. This is the "viral clip" look versus
- * plain SRT. `DejaVu Sans` is used because it ships with the Linux host that
- * burns the clips; libass falls back gracefully if absent.
+ * Build a styled ASS subtitle track with selectable presets:
+ *   default — white text, black outline (current viral-clip look)
+ *   bold    — yellow text, thick outline, larger
+ *   karaoke — word-by-word \k timing fill (words light up as spoken)
+ *   minimal — small clean white text, transparent dark bg, no outline
  */
 export function buildAss(
   words: TranscriptWord[],
@@ -136,9 +137,39 @@ export function buildAss(
   endSec: number,
   speakerCount: number,
   aspect: AspectRatio,
+  style: SubtitleStyle = "default",
 ): string {
   const st = styleFor(aspect);
-  const header = [
+  const header = assHeader(st, style);
+  const events = style === "karaoke"
+    ? karaokeEvents(words, startSec, endSec, speakerCount, st)
+    : groupedEvents(words, startSec, endSec, speakerCount, st, style);
+  return header.concat(events).join("\n") + "\n";
+}
+
+function assStyleLine(
+  fontSize: number,
+  marginV: number,
+  preset: SubtitleStyle,
+): string {
+  // Format: Name, Fontname, Fontsize, Primary, Secondary, Outline, Back, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+  const font = fontSize;
+  const mv = marginV;
+  switch (preset) {
+    case "bold":
+      // Yellow fill (&H0000FFFF), thick black outline (4), bigger shadow
+      return `Style: Default,DejaVu Sans,${font + 10},&H0000FFFF,&H000000FF,&H00000000,&HE0000000,-1,0,0,0,100,100,0,0,1,4,4,2,60,60,${mv + 20},1`;
+    case "minimal":
+      // Small white text, no outline, dark transparent background bar
+      return `Style: Default,DejaVu Sans,${font - 12},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,0,1,2,40,40,${mv},1`;
+    default:
+      // White fill, black outline, drop shadow
+      return `Style: Default,DejaVu Sans,${font},&H00FFFFFF,&H000000FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,5,3,2,80,80,${mv},1`;
+  }
+}
+
+function assHeader(st: { playResX: number; playResY: number; fontSize: number; marginV: number }, preset: SubtitleStyle): string[] {
+  return [
     "[Script Info]",
     "ScriptType: v4.00+",
     `PlayResX: ${st.playResX}`,
@@ -148,15 +179,69 @@ export function buildAss(
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    // white fill, black outline, semi-transparent shadow; bold; alignment 2 = bottom-centre
-    `Style: Default,DejaVu Sans,${st.fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,5,3,2,80,80,${st.marginV},1`,
+    assStyleLine(st.fontSize, st.marginV, preset),
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
   ];
-  const events = groupCues(words, startSec, endSec).map((c) => {
-    const text = assText(label(c.speaker, speakerCount) + c.text);
+}
+
+function groupedEvents(
+  words: TranscriptWord[],
+  startSec: number,
+  endSec: number,
+  speakerCount: number,
+  st: { fontSize: number; marginV: number },
+  style: SubtitleStyle,
+): string[] {
+  return groupCues(words, startSec, endSec).map((c) => {
+    const prefix = label(c.speaker, speakerCount);
+    let text = assText(prefix + c.text);
+    if (style === "bold") {
+      text = `{\\b1}${text}{\\b0}`;
+    }
     return `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${text}`;
   });
-  return header.concat(events).join("\n") + "\n";
+}
+
+function karaokeEvents(
+  words: TranscriptWord[],
+  startSec: number,
+  endSec: number,
+  speakerCount: number,
+  st: { fontSize: number; marginV: number },
+): string[] {
+  const inRange = words.filter((w) => w.end > startSec && w.start < endSec);
+  // Build sentence groups (4-8 words per screen), then \k inside each.
+  const groups: { words: typeof inRange; start: number; end: number }[] = [];
+  let buf: typeof inRange = [];
+  for (const w of inRange) {
+    buf.push(w);
+    if (buf.length >= 7 || SENTENCE_END.test(w.word)) {
+      groups.push({ words: [...buf], start: buf[0]!.start, end: buf[buf.length - 1]!.end });
+      buf = [];
+    }
+  }
+  if (buf.length > 0) {
+    groups.push({ words: [...buf], start: buf[0]!.start, end: buf[buf.length - 1]!.end });
+  }
+
+  const events: string[] = [];
+  const prevWords: typeof inRange = []; // for timing reference
+  for (const g of groups) {
+    const relStart = Math.max(0, g.start - startSec);
+    const relEnd = Math.max(0.05, g.end - startSec);
+    const prefix = label(g.words[0]?.speaker, speakerCount);
+    // Build \k tags: each word gets \[k][duration in cs][text]
+    const parts = g.words.map((w, i) => {
+      const prevEnd = i > 0 ? g.words[i - 1]!.end : g.start;
+      const dur = Math.round((w.end - prevEnd) * 100);
+      return `{\\k${Math.max(1, dur)}}${assText(w.word)}`;
+    });
+    const text = prefix + parts.join(" ");
+    // Karaoke secondary color = the "unfilled" color (dim grey), primary = white (filled)
+    // Uses \2c for secondary and \c for primary
+    events.push(`Dialogue: 0,${assTime(relStart)},${assTime(relEnd)},Default,,0,0,0,,{\\2c&H00AAAAAA&}${text}`);
+  }
+  return events;
 }

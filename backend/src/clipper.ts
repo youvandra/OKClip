@@ -9,29 +9,38 @@ export interface ClipSpec {
   endSec: number;
   aspectRatio: AspectRatio;
   sourceAspect?: AspectRatio;
-  /** Subtitle filename to burn in (relative to `cwd`), optional. */
   subtitleFile?: string;
-  /** Working directory (so subtitle paths stay simple). */
   cwd?: string;
+  /** Add a short fade in/out (0.3s). Defaults to true. */
+  fade?: boolean;
 }
 
 /**
  * Center-crop filter for a target aspect ratio. 16:9 assumes a landscape
  * source and needs no crop. Returns null for source-aspect matches.
- * (Face/subject-aware cropping is a Stage 3 upgrade —
- * see PLAN; naive center-crop can clip a speaker off-frame.)
+ *
+ * Blur-pillarbox variant: instead of naive center-crop (which cuts off
+ * speakers), keeps the full frame and blurs+scales it as background,
+ * overlaying the cropped foreground.
  */
 export function aspectFilter(aspect: AspectRatio, sourceAspect?: AspectRatio): string | null {
   if (sourceAspect && aspect === sourceAspect) return null;
   const w = "iw";
   const h = "ih";
   switch (aspect) {
-    case "9:16":
+    case "9:16": {
       if (sourceAspect === "9:16") return null;
-      return `crop=${h}*9/16:${h}:(${w}-${h}*9/16)/2:0`;
-    case "1:1":
+      // Blur-pillarbox: split into background (blurred+scaled) and foreground (cropped)
+      const cropW = `${h}*9/16`;
+      const offsetX = `(${w}-${cropW})/2`;
+      return `[0:v]split[orig][blur];[blur]scale=${cropW}:${h},crop=${cropW}:${h},boxblur=15:5[bg];[orig]crop=${cropW}:${h}:${offsetX}:0[fg];[bg][fg]overlay=0:0`;
+    }
+    case "1:1": {
       if (sourceAspect === "1:1") return null;
-      return `crop=${h}:${h}:(${w}-${h})/2:0`;
+      const cropW = `${h}`;
+      const offsetX = `(${w}-${cropW})/2`;
+      return `[0:v]split[orig][blur];[blur]scale=${cropW}:${h},crop=${cropW}:${h},boxblur=15:5[bg];[orig]crop=${cropW}:${h}:${offsetX}:0[fg];[bg][fg]overlay=0:0`;
+    }
     case "16:9":
       return null;
   }
@@ -77,6 +86,18 @@ export function buildClipArgs(spec: ClipSpec): string[] {
     "+faststart",
     spec.output,
   );
+  // Append fade after -vf to avoid filter-chain conflict. Fade is a video filter
+  // so it goes into -vf, not after encoding flags. Fix: insert before -c:v.
+  if (spec.fade !== false) {
+    const vfIdx = args.indexOf("-vf");
+    const fadeFilter = `fade=t=in:d=0.3,fade=t=out:d=0.3:st=${Math.max(0.1, duration - 0.3).toFixed(3)}`;
+    if (vfIdx >= 0) {
+      args[vfIdx + 1] = `${args[vfIdx + 1]},${fadeFilter}`;
+    } else {
+      const outIdx = args.indexOf(spec.output);
+      args.splice(outIdx, 0, "-vf", fadeFilter);
+    }
+  }
   return args;
 }
 

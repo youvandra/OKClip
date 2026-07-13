@@ -15,6 +15,8 @@ export interface ClipThumbnailSpec {
   output: string;
   startSec: number;
   endSec: number;
+  /** Optional text to overlay at the bottom (caption). */
+  overlayText?: string;
 }
 
 export function buildThumbnailArgs(spec: ThumbnailSpec): string[] {
@@ -88,9 +90,33 @@ export async function smartThumbnail(spec: ClipThumbnailSpec): Promise<string> {
     "Smart thumbnail selected",
   );
 
-  return thumbnail({
-    input: spec.input,
-    output: spec.output,
-    atSec: bestSec,
-  });
+  const out = spec.output;
+  // If overlay text is provided, burn it on via drawtext.
+  if (spec.overlayText) {
+    const tmpOut = out.replace(/\.jpg$/, "_raw.jpg");
+    await thumbnail({ input: spec.input, output: tmpOut, atSec: bestSec });
+    const escaped = spec.overlayText
+      .replace(/\\/g, "\\\\")
+      .replace(/:/g, "\\:")
+      .replace(/'/g, "\\\\'");
+    const res = await run(
+      "ffmpeg",
+      [
+        "-y", "-i", tmpOut,
+        "-vf", `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fallback_font=1:text='${escaped}':fontsize=36:fontcolor=white@0.9:box=1:boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:y=h-th-30`,
+        "-q:v", "3",
+        out,
+      ],
+      { timeoutMs: 30_000 },
+    );
+    try { require("node:fs").unlinkSync(tmpOut); } catch { /* ignore */ }
+    if (res.code !== 0) {
+      // Fall back to raw frame if drawtext fails
+      logger.warn({ err: res.stderr.slice(-200) }, "Text overlay failed; using raw frame");
+      await require("node:fs").promises.rename(tmpOut, out);
+    }
+    return out;
+  }
+
+  return thumbnail({ input: spec.input, output: out, atSec: bestSec });
 }

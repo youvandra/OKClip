@@ -36,7 +36,7 @@ import { config } from "./config.js";
 import { buildDelivery } from "./delivery.js";
 import { run } from "./exec.js";
 import { logger } from "./logger.js";
-import { stitch } from "./stitch.js";
+import { crossfadeStitch } from "./stitch.js";
 import { runJob } from "./worker.js";
 import type { Brief } from "./types.js";
 
@@ -151,7 +151,7 @@ async function handleDeliver(jobId: string, t: any): Promise<void> {
     let file = files[0]!;
     if (files.length > 1) {
       try {
-        file = await stitch(files, workDir, join(workDir, "reel.mp4"));
+        file = await crossfadeStitch(files, workDir, join(workDir, "reel.mp4"));
       } catch (err) {
         logger.warn({ jobId, err }, "Stitch failed; delivering first clip");
       }

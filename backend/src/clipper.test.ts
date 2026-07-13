@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { aspectFilter, buildClipArgs } from "./clipper.js";
 
-test("aspectFilter returns a center crop for vertical/square, none for 16:9", () => {
-  assert.match(aspectFilter("9:16") ?? "", /crop=ih\*9\/16/);
-  assert.match(aspectFilter("1:1") ?? "", /crop=ih:ih/);
+test("aspectFilter returns blur-pillarbox for vertical/square, null for 16:9", () => {
+  assert.match(aspectFilter("9:16") ?? "", /boxblur/);
+  assert.match(aspectFilter("1:1") ?? "", /boxblur/);
   assert.equal(aspectFilter("16:9"), null);
 });
 
@@ -25,7 +25,7 @@ test("buildClipArgs seeks, sets duration, and encodes", () => {
   assert.match(joined, /-b:a 192k/);
   assert.match(joined, /loudnorm/);
   assert.equal(args[args.length - 1], "out.mp4");
-  assert.ok(!joined.includes("-vf"));
+  assert.match(joined, /fade/); // default fade in/out
 });
 
 test("buildClipArgs adds a crop filter for 9:16", () => {

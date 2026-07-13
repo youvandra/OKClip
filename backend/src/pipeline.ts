@@ -97,6 +97,7 @@ export async function produceClip(params: {
   suffix: string;
   aspectRatio: ClipJob["terms"]["aspectRatio"];
   sourceAspect?: ClipJob["brief"]["sourceAspect"];
+  subtitleStyle?: ClipJob["brief"]["subtitleStyle"];
   scenes: number[];
 }): Promise<ClipResult> {
   const { jobId, sourcePath, workDir, transcript, moment, index, suffix } =
@@ -113,6 +114,7 @@ export async function produceClip(params: {
       moment.endSec,
       transcript.speakerCount,
       params.aspectRatio,
+      params.subtitleStyle,
     ),
   );
 
@@ -134,6 +136,7 @@ export async function produceClip(params: {
     output: join(workDir, thumbFile),
     startSec,
     endSec: moment.endSec,
+    overlayText: moment.caption || undefined,
   });
 
   return toClipResult(
@@ -220,6 +223,7 @@ export async function runPipeline(
         suffix: "",
         aspectRatio: job.terms.aspectRatio,
         sourceAspect: job.brief.sourceAspect,
+        subtitleStyle: job.brief.subtitleStyle,
         scenes,
       }),
     );
