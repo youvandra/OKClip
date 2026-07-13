@@ -8,9 +8,9 @@ test("isExpired compares age against TTL", () => {
 });
 
 test("resolveClipPath allows a normal filename", () => {
-  const p = resolveClipPath("job123", "clip-1.mp4");
+  const p = resolveClipPath("job123", "dQw4w9WgXcQ_1_0s.mp4");
   assert.ok(p);
-  assert.match(p!, /job123\/clip-1\.mp4$/);
+  assert.match(p!, /job123\/dQw4w9WgXcQ_1_0s\.mp4$/);
 });
 
 test("resolveClipPath rejects traversal attempts", () => {

@@ -48,8 +48,8 @@ test("buildDeliverySummary renders per-clip lines", () => {
     message: "ok",
     clips: [
       {
-        downloadUrl: "/clips/j1/clip-1.mp4",
-        thumbnailUrl: "/clips/j1/clip-1.jpg",
+        downloadUrl: "/clips/j1/dQw4w9WgXcQ_1_0s.mp4",
+        thumbnailUrl: "/clips/j1/dQw4w9WgXcQ_1_0s.jpg",
         viralScore: 87,
         confidence: 0.8,
         durationSec: 47,

@@ -2,6 +2,15 @@ import type { AspectRatio, TranscriptWord } from "./types.js";
 
 export type SubtitleStyle = "default" | "bold" | "karaoke" | "minimal";
 
+/** Pick font based on language. Uses CJK-capable font for Asian scripts. */
+function fontFor(language?: string): string {
+  const lang = (language ?? "en").toLowerCase();
+  if (["zh", "ja", "ko", "th", "hi", "ar"].some((l) => lang.startsWith(l))) {
+    return "WenQuanYi Zen Hei";
+  }
+  return "DejaVu Sans";
+}
+
 /** Format seconds as an SRT timestamp (hh:mm:ss,mmm). */
 export function srtTime(sec: number): string {
   const clamped = Math.max(0, sec);
@@ -140,9 +149,11 @@ export function buildAss(
   speakerCount: number,
   aspect: AspectRatio,
   style: SubtitleStyle = "default",
+  language?: string,
 ): string {
   const st = styleFor(aspect);
-  const header = assHeader(st, style);
+  const font = fontFor(language);
+  const header = assHeader(st, style, font);
   const events = style === "karaoke"
     ? karaokeEvents(words, startSec, endSec, speakerCount, st)
     : groupedEvents(words, startSec, endSec, speakerCount, st, style);
@@ -153,24 +164,21 @@ function assStyleLine(
   fontSize: number,
   marginV: number,
   preset: SubtitleStyle,
+  font = "DejaVu Sans",
 ): string {
-  // Format: Name, Fontname, Fontsize, Primary, Secondary, Outline, Back, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-  const font = fontSize;
+  const f = fontSize;
   const mv = marginV;
   switch (preset) {
     case "bold":
-      // Yellow fill (&H0000FFFF), thick black outline (4), bigger shadow
-      return `Style: Default,DejaVu Sans,${font + 10},&H0000FFFF,&H000000FF,&H00000000,&HE0000000,-1,0,0,0,100,100,0,0,1,4,4,2,60,60,${mv + 20},1`;
+      return `Style: Default,${font},${f + 10},&H0000FFFF,&H000000FF,&H00000000,&HE0000000,-1,0,0,0,100,100,0,0,1,4,4,2,60,60,${mv + 20},1`;
     case "minimal":
-      // Small white text, no outline, dark transparent background bar
-      return `Style: Default,DejaVu Sans,${font - 12},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,0,1,2,40,40,${mv},1`;
+      return `Style: Default,${font},${f - 12},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,0,1,2,40,40,${mv},1`;
     default:
-      // White fill, black outline, drop shadow
-      return `Style: Default,DejaVu Sans,${font},&H00FFFFFF,&H000000FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,5,3,2,80,80,${mv},1`;
+      return `Style: Default,${font},${f},&H00FFFFFF,&H000000FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,5,3,2,80,80,${mv},1`;
   }
 }
 
-function assHeader(st: { playResX: number; playResY: number; fontSize: number; marginV: number }, preset: SubtitleStyle): string[] {
+function assHeader(st: { playResX: number; playResY: number; fontSize: number; marginV: number }, preset: SubtitleStyle, font = "DejaVu Sans"): string[] {
   return [
     "[Script Info]",
     "ScriptType: v4.00+",
@@ -181,7 +189,7 @@ function assHeader(st: { playResX: number; playResY: number; fontSize: number; m
     "",
     "[V4+ Styles]",
     "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-    assStyleLine(st.fontSize, st.marginV, preset),
+    assStyleLine(st.fontSize, st.marginV, preset, font),
     "",
     "[Events]",
     "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",

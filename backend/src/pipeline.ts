@@ -98,12 +98,16 @@ export async function produceClip(params: {
   aspectRatio: ClipJob["terms"]["aspectRatio"];
   sourceAspect?: ClipJob["brief"]["sourceAspect"];
   subtitleStyle?: ClipJob["brief"]["subtitleStyle"];
+  language?: string;
+  videoId?: string;
   scenes: number[];
 }): Promise<ClipResult> {
-  const { jobId, sourcePath, workDir, transcript, moment, index, suffix } =
+  const { jobId, sourcePath, workDir, transcript, moment, index, suffix, language } =
     params;
   const startSec = refineStart(moment.startSec, params.scenes);
-  const base = `clip-${index + 1}${suffix}`;
+  const vid = params.videoId ?? "clip";
+  const ts = `${Math.round(startSec)}s`;
+  const base = `${vid}_${index + 1}_${ts}${suffix}`;
 
   const subFile = `${base}.ass`;
   await writeFile(
@@ -115,6 +119,7 @@ export async function produceClip(params: {
       transcript.speakerCount,
       params.aspectRatio,
       params.subtitleStyle,
+      language,
     ),
   );
 
@@ -137,6 +142,7 @@ export async function produceClip(params: {
     startSec,
     endSec: moment.endSec,
     overlayText: moment.caption || undefined,
+    language: params.language,
   });
 
   return toClipResult(
@@ -225,6 +231,8 @@ export async function runPipeline(
         aspectRatio: job.terms.aspectRatio,
         sourceAspect: job.brief.sourceAspect,
         subtitleStyle: job.brief.subtitleStyle,
+        language: job.brief.language ?? transcript.language,
+        videoId: job.brief.url.match(/[?&]v=([\w-]+)/)?.[1],
         scenes,
       }),
     );
