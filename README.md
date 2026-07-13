@@ -18,6 +18,7 @@ Built for the OKX.AI Genesis Hackathon. Sibling project to
 | **Work engine** | this repo — invoked by the ASP agent on `job_accepted` |
 | **Human surface** | `/` — Alpine + Tailwind SPA |
 | **Stack** | Node 20 · TypeScript · Express 5 · Deepgram · Sumopod LLM · FFmpeg |
+| **Download** | loader.to API (free 3rd-party, no proxy/cookies needed) |
 
 ---
 
@@ -84,7 +85,11 @@ okclip run --url "https://youtu.be/…" --prompt "3 DeFi clips for tiktok" --cli
 | `GET` | `/clips/:jobId/:file` | the produced mp4 / thumbnail (path-traversal safe) |
 | `GET` | `/health` | liveness + feature flags |
 
-A `brief` is `{ url, prompt, clipCount (1–5), aspectRatio?, maxClipSeconds?, language? }`.
+A `brief` is `{ url, prompt, clipCount (1–5), aspectRatio?, maxClipSeconds?, minClipSeconds?, language?, subtitleStyle?, resolution? }`.
+
+**Platform auto-detect**: mention `tiktok`/`reels`/`shorts`/`youtube` in prompt → aspect & max duration auto-set.
+
+**Subtitle styles**: `default` (white, outline), `bold` (yellow, pop animation, thick outline), `karaoke` (word-by-word fill), `minimal` (clean, fade-in).
 
 ### Delivery shape (per clip)
 
@@ -97,7 +102,7 @@ A `brief` is `{ url, prompt, clipCount (1–5), aspectRatio?, maxClipSeconds?, l
   "durationSec": 47,
   "timestamp": { "startSec": 272, "endSec": 319 },
   "transcriptSnippet": "…",
-  "speakers": ["Host", "Guest 1"],
+  "speakers": ["Speaker 1", "Speaker 2"],
   "reasons": ["topic match: DeFi", "question -> answer exchange", "opens on a scene cut"],
   "caption": "…", "hashtags": ["#DeFi"],
   "evidence": { "sourceDurationSec": 3720, "analyzedSegments": 214, "asr": "deepgram-nova-2", "caveat": "…" }
@@ -112,15 +117,15 @@ so an agent can swap a pick without a full re-process.
 ## Pipeline
 
 ```
-3rd-party download (720p) -> Deepgram transcribe + word-level + diarize
-  -> LLM select moments (+ score + reasons + runner-ups)
-  -> scene-cut refine (hook) -> FFmpeg cut + burn speaker-labeled subtitles
-  -> thumbnail -> decision-grade delivery
+loader.to download → Deepgram transcribe + word-level + diarize
+  → LLM select moments (+ score + reasons + runner-ups)
+  → scene-cut refine (hook) → face-aware crop (cropdetect auto-bias)
+  → FFmpeg cut + burn animated subtitles (style presets: default/bold/karaoke/minimal)
+  → fade in/out (0.3s) + blur-pillarbox crop (16:9→9:16 keeps full frame)
+  → smart thumbnail (3-frame sharpness scoring + AI text overlay)
+  → decision-grade delivery
+  → multi-clip stitch with crossfade transitions
 ```
-
-Deterministic where possible; the LLM only writes the selection and captions.
-Scene detection degrades gracefully. Clips start/end on complete sentences
-(word-level timestamps), never mid-word.
 
 ---
 
@@ -213,18 +218,19 @@ backend/src/
   index.ts        Express server: work API, clip serving, cleanup
   cli.ts          `okclip run` — headless engine the ASP agent shells out to
   worker.ts       run one job to completion (no HTTP)
-  a2a-adapter.ts  OKX A2A job <-> Brief + XMTP delivery summary
+  a2a-adapter.ts  OKX A2A job <-> Brief + platform auto-detect (TikTok/Reels/Shorts)
   jobs.ts         internal work API (negotiate / jobs / revise)
   negotiation.ts  pricing, aspect inference, decline/clarify
-  pipeline.ts     download -> transcribe -> analyze -> clip orchestration
-  downloader.ts   Video download via loader.to API + oEmbed probe
+  pipeline.ts     retry logic + download → transcribe → analyze → clip orchestration
+  loader-downloader.ts  YouTube download via free loader.to API (replaced yt-dlp)
+  downloader.ts   oEmbed probe + loader.to download bridge
   transcriber.ts  Deepgram nova-2 (transcript + word-level + diarization)
-  analyzer.ts     LLM moment selection, scoring, sentence-boundary snapping
-  clipper.ts      ffmpeg cut + aspect crop + subtitle burn
-  subtitles.ts    speaker-labeled SRT from word timings
-  thumbnail.ts    frame extraction
-  hooks.ts        scene detection + hook refine
-  stitch.ts       highlight-reel concat
+  analyzer.ts     LLM moment selection, scoring, sentence-boundary snapping, duration enforcement
+  clipper.ts      ffmpeg cut + face-aware blur-pillarbox crop + subtitle burn + fade
+  subtitles.ts    style presets (default/bold/karaoke/minimal) + ASS animations + speaker labels
+  thumbnail.ts    smart thumbnail (sharpness scoring 3 frames) + AI text overlay via drawtext
+  hooks.ts        scene detection near candidate timestamps + hook refine
+  stitch.ts       highlight-reel concat + crossfade transitions (xfade)
   memory.ts       per-agent style memory (the data moat)
   storage.ts      safe clip serving + TTL cleanup
   queue.ts        in-memory single-worker job queue
