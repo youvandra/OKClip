@@ -13,34 +13,72 @@ export interface ClipSpec {
   cwd?: string;
   /** Add a short fade in/out (0.3s). Defaults to true. */
   fade?: boolean;
+  /** Smart crop offset (0–1). 0.5 = center, 0 = left, 1 = right. */
+  cropBias?: number;
 }
 
 /**
- * Center-crop filter for a target aspect ratio. 16:9 assumes a landscape
- * source and needs no crop. Returns null for source-aspect matches.
- *
- * Blur-pillarbox variant: instead of naive center-crop (which cuts off
- * speakers), keeps the full frame and blurs+scales it as background,
- * overlaying the cropped foreground.
+ * Auto-detect where the action is in the frame by sampling frames and
+ * using ffmpeg's cropdetect filter. Returns a bias 0–1 (0=left, 1=right).
  */
-export function aspectFilter(aspect: AspectRatio, sourceAspect?: AspectRatio): string | null {
+export async function detectCropBias(
+  input: string,
+  startSec: number,
+  endSec: number,
+): Promise<number> {
+  try {
+    const midpoint = (startSec + endSec) / 2;
+    const res = await run(
+      "ffmpeg",
+      [
+        "-y", "-ss", midpoint.toFixed(1), "-i", input,
+        "-t", "3", "-vf", "cropdetect=limit=24:round=2:reset=0",
+        "-f", "null", "-",
+      ],
+      { timeoutMs: 15_000 },
+    );
+    // cropdetect prints lines like "crop=1280:720:240:0"
+    const re = /crop=(\d+):(\d+):(\d+):\d+/g;
+    const matches = [...res.stderr.matchAll(re)];
+    if (matches.length === 0) return 0.5; // center fallback
+    const offsets = matches.map((m) => parseInt(m[3]!, 10));
+    const avgOffset = offsets.reduce((a, b) => a + b, 0) / offsets.length;
+    // Convert offset to bias: 0 = fully left, 1 = fully right
+    const width = parseInt(matches[0]![1]!, 10);
+    const sourceWidth = parseInt(matches[0]![1]!, 10) + parseInt(matches[0]![3]!, 10) * 2;
+    // The crop W:H:X:Y — X is where the crop starts. If X > 0, subject is right.
+    // Bias = X / (sourceWidth - cropWidth). Clip to 0.1–0.9 to avoid edges.
+    if (sourceWidth <= width) return 0.5;
+    const maxOffset = sourceWidth - width;
+    const bias = maxOffset > 0 ? avgOffset / maxOffset : 0.5;
+    logger.info({ bias: bias.toFixed(2), samples: matches.length }, "Crop bias detected");
+    return Math.max(0.1, Math.min(0.9, bias));
+  } catch {
+    return 0.5;
+  }
+}
+
+/**
+ * Blur-pillarbox filter for vertical/square crop. Uses cropBias to shift
+ * the crop window instead of always centering.
+ */
+function blurPillarbox(targetW: string, h: string, w: string, bias = 0.5): string {
+  const offsetX = `(${w}-${targetW})*${bias.toFixed(2)}`;
+  return `[0:v]split[orig][blur];[blur]scale=${targetW}:${h},crop=${targetW}:${h},boxblur=15:5[bg];[orig]crop=${targetW}:${h}:${offsetX}:0[fg];[bg][fg]overlay=0:0`;
+}
+
+export function aspectFilter(aspect: AspectRatio, sourceAspect?: AspectRatio, bias?: number): string | null {
   if (sourceAspect && aspect === sourceAspect) return null;
   const w = "iw";
   const h = "ih";
+  const b = bias ?? 0.5;
   switch (aspect) {
-    case "9:16": {
+    case "9:16":
       if (sourceAspect === "9:16") return null;
-      // Blur-pillarbox: split into background (blurred+scaled) and foreground (cropped)
-      const cropW = `${h}*9/16`;
-      const offsetX = `(${w}-${cropW})/2`;
-      return `[0:v]split[orig][blur];[blur]scale=${cropW}:${h},crop=${cropW}:${h},boxblur=15:5[bg];[orig]crop=${cropW}:${h}:${offsetX}:0[fg];[bg][fg]overlay=0:0`;
-    }
-    case "1:1": {
+      return blurPillarbox(`${h}*9/16`, h, w, b);
+    case "1:1":
       if (sourceAspect === "1:1") return null;
-      const cropW = `${h}`;
-      const offsetX = `(${w}-${cropW})/2`;
-      return `[0:v]split[orig][blur];[blur]scale=${cropW}:${h},crop=${cropW}:${h},boxblur=15:5[bg];[orig]crop=${cropW}:${h}:${offsetX}:0[fg];[bg][fg]overlay=0:0`;
-    }
+      return blurPillarbox(`${h}`, h, w, b);
     case "16:9":
       return null;
   }
@@ -61,7 +99,7 @@ export function buildClipArgs(spec: ClipSpec): string[] {
     duration.toFixed(3),
   ];
   const filters: string[] = [];
-  const crop = aspectFilter(spec.aspectRatio, spec.sourceAspect);
+  const crop = aspectFilter(spec.aspectRatio, spec.sourceAspect, spec.cropBias);
   if (crop) filters.push(crop);
   if (spec.subtitleFile) {
     filters.push(`subtitles='${spec.subtitleFile}'`);
@@ -103,6 +141,14 @@ export function buildClipArgs(spec: ClipSpec): string[] {
 
 /** Cut a single clip with ffmpeg. Returns the output path. */
 export async function clip(spec: ClipSpec): Promise<string> {
+  if (
+    spec.cropBias === undefined &&
+    spec.aspectRatio !== "16:9" &&
+    spec.aspectRatio !== spec.sourceAspect
+  ) {
+    spec.cropBias = await detectCropBias(spec.input, spec.startSec, spec.endSec);
+    spec.cropBias ??= 0.5;
+  }
   const res = await run("ffmpeg", buildClipArgs(spec), {
     timeoutMs: 5 * 60_000,
     cwd: spec.cwd,

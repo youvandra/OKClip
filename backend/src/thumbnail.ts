@@ -91,27 +91,36 @@ export async function smartThumbnail(spec: ClipThumbnailSpec): Promise<string> {
   );
 
   const out = spec.output;
-  // If overlay text is provided, burn it on via drawtext.
+  // If overlay text is provided, burn it on via drawtext with styled thumbnail look.
   if (spec.overlayText) {
     const tmpOut = out.replace(/\.jpg$/, "_raw.jpg");
     await thumbnail({ input: spec.input, output: tmpOut, atSec: bestSec });
-    const escaped = spec.overlayText
-      .replace(/\\/g, "\\\\")
-      .replace(/:/g, "\\:")
-      .replace(/'/g, "\\\\'");
+
+    const lines = spec.overlayText
+      .split(/[.!?]\s+/)
+      .filter(Boolean)
+      .slice(0, 2);
+
+    const drawtexts = lines.map((line, i) => {
+      const clean = line
+        .replace(/\\/g, "\\\\")
+        .replace(/:/g, "\\:")
+        .replace(/'/g, "'\\\\\\''")
+        .trim();
+      const y = i === 0 ? "h-th*2-60" : "h-th-20";
+      const fontSize = i === 0 ? 42 : 30;
+      const alpha = i === 0 ? "@0.95" : "@0.8";
+      return `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fallback_font=1:text='${clean}':fontsize=${fontSize}:fontcolor=white${alpha}:box=1:boxcolor=black@0.55:boxborderw=16:x=(w-text_w)/2:y=${y}`;
+    });
+
     const res = await run(
       "ffmpeg",
-      [
-        "-y", "-i", tmpOut,
-        "-vf", `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:fallback_font=1:text='${escaped}':fontsize=36:fontcolor=white@0.9:box=1:boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:y=h-th-30`,
-        "-q:v", "3",
-        out,
-      ],
+      ["-y", "-i", tmpOut, "-vf", drawtexts.join(","), "-q:v", "2", out],
       { timeoutMs: 30_000 },
     );
     try { unlinkSync(tmpOut); } catch { /* ignore */ }
     if (res.code !== 0) {
-      logger.warn({ err: res.stderr.slice(-200) }, "Text overlay failed; using raw frame");
+      logger.warn({ err: res.stderr.slice(-200) }, "Thumbnail text overlay failed; using raw frame");
       try { renameSync(tmpOut, out); } catch { /* ignore */ }
     }
     return out;

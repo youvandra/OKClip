@@ -1,4 +1,6 @@
-import type { AspectRatio, SubtitleStyle, TranscriptWord } from "./types.js";
+import type { AspectRatio, TranscriptWord } from "./types.js";
+
+export type SubtitleStyle = "default" | "bold" | "karaoke" | "minimal";
 
 /** Format seconds as an SRT timestamp (hh:mm:ss,mmm). */
 export function srtTime(sec: number): string {
@@ -197,8 +199,15 @@ function groupedEvents(
   return groupCues(words, startSec, endSec).map((c) => {
     const prefix = label(c.speaker, speakerCount);
     let text = assText(prefix + c.text);
+    const durMs = (c.end - c.start) * 1000;
     if (style === "bold") {
-      text = `{\\b1}${text}{\\b0}`;
+      // Scale-in pop effect: 80%→100% over first 200ms
+      text = `{\\fscx80}{\\fscy80}{\\t(0,200,\\fscx100\\fscy100)}${text}`;
+    } else if (style === "karaoke") {
+      // Per-word \k fill handled by karaokeEvents
+    } else if (style === "minimal") {
+      // Fade in from transparent
+      text = `{\\alpha&H80&}{\\t(0,150,\\alpha&H00&)}${text}`;
     }
     return `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${text}`;
   });
