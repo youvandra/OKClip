@@ -64,10 +64,12 @@ export async function detectCropBias(
  */
 function buildCropFilter(aspect: AspectRatio, bias = 0.5): string | null {
   if (aspect === "16:9") return null;
-  const targetW = aspect === "9:16" ? "floor(ih*9/16)" : "ih";
+  const targetW = aspect === "9:16"
+    ? "floor(ih*9/16/2)*2"
+    : "floor(ih/2)*2";
   const offsetX = aspect === "9:16"
-    ? `floor((iw-${targetW})*${bias.toFixed(2)}+0.5)`
-    : `floor((iw-ih)*${bias.toFixed(2)}+0.5)`;
+    ? `floor((iw-${targetW})*${bias.toFixed(2)}/2)*2`
+    : `floor((iw-ih)*${bias.toFixed(2)}/2)*2`;
   return `crop=${targetW}:ih:${offsetX}:0,scale=${targetW}:ih`;
 }
 
