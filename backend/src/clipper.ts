@@ -59,29 +59,24 @@ export async function detectCropBias(
 }
 
 /**
- * Blur-pillarbox filter for vertical/square crop. Uses cropBias to shift
- * the crop window instead of always centering.
+ * Build crop filter for vertical/square output. Uses blur-pillarbox approach
+ * with integer math to avoid ffmpeg float-crop black-screen bugs.
  */
-function blurPillarbox(targetW: string, h: string, w: string, bias = 0.5): string {
-  const offsetX = `(${w}-${targetW})*${bias.toFixed(2)}`;
-  return `[0:v]split[orig][blur];[blur]scale=${targetW}:${h},crop=${targetW}:${h},boxblur=15:5[bg];[orig]crop=${targetW}:${h}:${offsetX}:0[fg];[bg][fg]overlay=0:0`;
+function buildCropFilter(aspect: AspectRatio, bias = 0.5): string | null {
+  if (aspect === "16:9") return null;
+  const targetW = aspect === "9:16" ? "floor(ih*9/16)" : "ih";
+  // Compute offset using integer arithmetic: round to nearest pixel
+  const offsetX = aspect === "9:16"
+    ? `floor((iw-${targetW})*${bias.toFixed(2)}+0.5)`
+    : `floor((iw-ih)*${bias.toFixed(2)}+0.5)`;
+  // Two-pass: first scale+blur bg, then overlay cropped fg
+  // Pad labels to avoid conflicts: use [v0]/[v1] instead of [orig]/[blur]
+  return `[0:v]split[v0][v1];[v0]scale=${targetW}:ih:force_original_aspect_ratio=increase,crop=${targetW}:ih,boxblur=20:10[bg];[v1]crop=${targetW}:ih:${offsetX}:0[fg];[bg][fg]overlay=0:0`;
 }
 
-export function aspectFilter(aspect: AspectRatio, sourceAspect?: AspectRatio, bias?: number): string | null {
-  if (sourceAspect && aspect === sourceAspect) return null;
-  const w = "iw";
-  const h = "ih";
+export function aspectFilter(aspect: AspectRatio, _sourceAspect?: AspectRatio, bias?: number): string | null {
   const b = bias ?? 0.5;
-  switch (aspect) {
-    case "9:16":
-      if (sourceAspect === "9:16") return null;
-      return blurPillarbox(`${h}*9/16`, h, w, b);
-    case "1:1":
-      if (sourceAspect === "1:1") return null;
-      return blurPillarbox(`${h}`, h, w, b);
-    case "16:9":
-      return null;
-  }
+  return buildCropFilter(aspect, b);
 }
 
 /** Build the ffmpeg argument vector for cutting one clip. Pure/testable. */
