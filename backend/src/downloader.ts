@@ -10,8 +10,13 @@ import { logger } from "./logger.js";
  */
 function ytdlpBase(): string[] {
   const base = ["--no-warnings"];
-  if (config.YTDLP_PROXY) base.push("--proxy", config.YTDLP_PROXY);
-  if (config.YTDLP_COOKIES) base.push("--cookies", config.YTDLP_COOKIES);
+  // Prefer cookies (fast, no proxy needed) over proxy. If both are
+  // configured, cookies win and the proxy is skipped.
+  if (config.YTDLP_COOKIES) {
+    base.push("--cookies", config.YTDLP_COOKIES);
+  } else if (config.YTDLP_PROXY) {
+    base.push("--proxy", config.YTDLP_PROXY);
+  }
   return base;
 }
 
