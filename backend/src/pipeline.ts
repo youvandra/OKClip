@@ -143,6 +143,7 @@ export async function produceClip(params: {
     endSec: moment.endSec,
     overlayText: moment.caption || undefined,
     language: params.language,
+    aspectRatio: params.aspectRatio,
   });
 
   return toClipResult(
