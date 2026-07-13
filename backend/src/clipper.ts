@@ -55,9 +55,7 @@ export function buildClipArgs(spec: ClipSpec): string[] {
   const crop = aspectFilter(spec.aspectRatio, spec.sourceAspect);
   if (crop) filters.push(crop);
   if (spec.subtitleFile) {
-    // `original_size=1` tells libass to respect the PlayRes from the ASS
-    // header, keeping font sizes and margins consistent on every video.
-    filters.push(`subtitles='${spec.subtitleFile}':original_size=1`);
+    filters.push(`subtitles='${spec.subtitleFile}'`);
   }
   if (filters.length > 0) args.push("-vf", filters.join(","));
   args.push(

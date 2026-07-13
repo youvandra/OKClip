@@ -50,7 +50,7 @@ test("buildClipArgs chains crop and subtitle burn", () => {
   });
   const vf = args[args.indexOf("-vf") + 1]!;
   assert.match(vf, /crop=/);
-  assert.match(vf, /subtitles='clip\.srt':original_size=1/);
+  assert.match(vf, /subtitles='clip\.srt'/);
   assert.ok(vf.includes(","));
 });
 
@@ -64,5 +64,5 @@ test("buildClipArgs burns subtitles even without a crop (16:9)", () => {
     subtitleFile: "clip.srt",
   });
   const vf = args[args.indexOf("-vf") + 1]!;
-  assert.match(vf, /subtitles='clip\.srt':original_size=1/);
+  assert.match(vf, /subtitles='clip\.srt'/);
 });
