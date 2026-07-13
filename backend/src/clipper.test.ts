@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { aspectFilter, buildClipArgs } from "./clipper.js";
 
-test("aspectFilter returns blur-pillarbox for vertical/square, null for 16:9", () => {
-  assert.match(aspectFilter("9:16") ?? "", /split/);
-  assert.match(aspectFilter("1:1") ?? "", /split/);
+test("aspectFilter returns crop for vertical/square, null for 16:9", () => {
+  assert.match(aspectFilter("9:16") ?? "", /crop=/);
+  assert.match(aspectFilter("1:1") ?? "", /crop=/);
   assert.equal(aspectFilter("16:9"), null);
 });
 

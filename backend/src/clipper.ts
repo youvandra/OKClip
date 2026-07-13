@@ -59,19 +59,16 @@ export async function detectCropBias(
 }
 
 /**
- * Build crop filter for vertical/square output. Uses blur-pillarbox approach
- * with integer math to avoid ffmpeg float-crop black-screen bugs.
+ * Simple center-crop filter. Uses integer math via floor() to avoid
+ * ffmpeg floating-point black-screen bugs with complex filter chains.
  */
 function buildCropFilter(aspect: AspectRatio, bias = 0.5): string | null {
   if (aspect === "16:9") return null;
   const targetW = aspect === "9:16" ? "floor(ih*9/16)" : "ih";
-  // Compute offset using integer arithmetic: round to nearest pixel
   const offsetX = aspect === "9:16"
     ? `floor((iw-${targetW})*${bias.toFixed(2)}+0.5)`
     : `floor((iw-ih)*${bias.toFixed(2)}+0.5)`;
-  // Two-pass: first scale+blur bg, then overlay cropped fg
-  // Pad labels to avoid conflicts: use [v0]/[v1] instead of [orig]/[blur]
-  return `[0:v]split[v0][v1];[v0]scale=${targetW}:ih:force_original_aspect_ratio=increase,crop=${targetW}:ih,boxblur=20:10[bg];[v1]crop=${targetW}:ih:${offsetX}:0[fg];[bg][fg]overlay=0:0`;
+  return `crop=${targetW}:ih:${offsetX}:0,scale=${targetW}:ih`;
 }
 
 export function aspectFilter(aspect: AspectRatio, _sourceAspect?: AspectRatio, bias?: number): string | null {
@@ -104,7 +101,7 @@ export function buildClipArgs(spec: ClipSpec): string[] {
     "-c:v",
     "libx264",
     "-preset",
-    "medium",
+    "fast",
     "-crf",
     "18",
     "-pix_fmt",
