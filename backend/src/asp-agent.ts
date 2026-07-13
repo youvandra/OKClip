@@ -17,6 +17,7 @@
  * gateway (okx-a2a doctor green), plus the pipeline deps (yt-dlp, ffmpeg,
  * Deepgram/Sumopod keys).
  */
+import { createServer } from "node:http";
 import { argv } from "node:process";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -108,6 +109,7 @@ async function handleApply(jobId: string, t: any): Promise<void> {
     throw err; // retry a couple times, then stop
   }
   phases.set(jobId, "applied");
+  totalApplied++;
   logger.info({ jobId, price, symbol }, "Applied to task");
 }
 
@@ -173,16 +175,40 @@ async function handleDeliver(jobId: string, t: any): Promise<void> {
     throw err; // transient — retry next poll (engine output cached)
   }
   phases.set(jobId, "delivered");
+  totalDelivered++;
   logger.info({ jobId }, "Delivered");
 }
 
+let lastPollAt = 0;
+let lastPollOk = false;
+let lastPollError = "";
+let totalApplied = 0;
+let totalDelivered = 0;
+
 async function pollOnce(): Promise<void> {
   const out = await oc(["agent", "active-tasks"]);
+  lastPollAt = Date.now();
+  lastPollOk = true;
+  lastPollError = "";
   const tasks: any[] = out?.data?.tasks ?? [];
+  logger.debug({ taskCount: tasks.length }, "Polled active tasks");
   for (const t of tasks) {
     const jobId = jobIdOf(t);
-    if (!jobId || !isOurs(t, AGENT_ID)) continue;
-    if (ALLOWED_CLIENT && clientOf(t) !== ALLOWED_CLIENT) continue;
+    if (!jobId) {
+      logger.debug({ raw: t }, "Task missing jobId — skipping");
+      continue;
+    }
+    if (!isOurs(t, AGENT_ID)) {
+      logger.debug({ jobId, raw: t }, "Task not ours — skipping");
+      continue;
+    }
+    if (ALLOWED_CLIENT && clientOf(t) !== ALLOWED_CLIENT) {
+      logger.warn(
+        { jobId, client: clientOf(t), gate: ALLOWED_CLIENT },
+        "Task gated by ALLOWED_CLIENT — skipping",
+      );
+      continue;
+    }
 
     const phase = phases.get(jobId);
     if (phase === "delivered" || phase === "declined" || phase === "disputed") {
@@ -219,14 +245,39 @@ async function pollOnce(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  const startTime = Date.now();
+
   logger.info(
     { AGENT_ID, POLL_MS, MAX_CONCURRENT, gated: ALLOWED_CLIENT || "off" },
     "OKClip ASP worker started",
   );
+
+  const healthPort = Number(process.env.ASP_HEALTH_PORT ?? 0);
+  if (healthPort > 0) {
+    createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          status: lastPollOk ? "ok" : "error",
+          agentId: AGENT_ID,
+          gated: ALLOWED_CLIENT || null,
+          lastPollAt: lastPollAt ? new Date(lastPollAt).toISOString() : null,
+          lastPollError: lastPollError || null,
+          stats: { totalApplied, totalDelivered, inFlight: inFlight.size, phases: Object.fromEntries(phases) },
+          uptimeMs: Date.now() - startTime,
+        }),
+      );
+    }).listen(healthPort, "127.0.0.1", () => {
+      logger.info({ healthPort }, "ASP health endpoint listening");
+    });
+  }
+
   for (;;) {
     try {
       await pollOnce();
     } catch (err) {
+      lastPollOk = false;
+      lastPollError = err instanceof Error ? err.message : String(err);
       logger.error({ err }, "Poll failed");
     }
     await new Promise((r) => setTimeout(r, POLL_MS));
