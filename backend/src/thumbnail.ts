@@ -91,33 +91,38 @@ export async function smartThumbnail(spec: ClipThumbnailSpec): Promise<string> {
   );
 
   const out = spec.output;
-  // If overlay text is provided, burn it on via drawtext with styled thumbnail look.
+  // If overlay text, render a thumbnail card: gradient bottom bar + bold text.
   if (spec.overlayText) {
     const tmpOut = out.replace(/\.jpg$/, "_raw.jpg");
     await thumbnail({ input: spec.input, output: tmpOut, atSec: bestSec });
 
-    const lines = spec.overlayText
-      .split(/[.!?]\s+/)
-      .filter(Boolean)
-      .slice(0, 2);
+    const tagline = spec.overlayText
+      .replace(/\\/g, "\\\\")
+      .replace(/:/g, "\\:")
+      .replace(/'/g, "'\\\\\\''")
+      .trim();
 
-    const drawtexts = lines.map((line, i) => {
-      const clean = line.replace(/\\/g, "\\\\").replace(/:/g, "\\:").trim();
-      const y = i === 0 ? "h-th*2-60" : "h-th-20";
-      const fontSize = i === 0 ? 42 : 30;
-      const alpha = i === 0 ? "@0.95:borderw=20" : "@0.8:borderw=12";
-      const font = "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
-      return `drawtext=${font}:fontsize=${fontSize}:fontcolor=white@0.95:box=1:boxcolor=black@0.55:boxborderw=16:x=(w-text_w)/2:y=${y}:text='${clean}'`;
-    });
-
+    // Two-layer approach: gradient overlay + text
     const res = await run(
       "ffmpeg",
-      ["-y", "-i", tmpOut, "-vf", drawtexts.join(","), "-q:v", "2", out],
+      [
+        "-y", "-i", tmpOut,
+        "-vf",
+        // Bottom 35% gradient overlay + bold white text centred
+        `split[img][ovr];` +
+        `[ovr]drawbox=x=0:y=ih*0.65:w=iw:h=ih*0.35:color=black@0.6:t=fill[grad];` +
+        `[img][grad]overlay=0:0,` +
+        `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:` +
+        `text='${tagline}':fontsize=38:fontcolor=white@0.95:` +
+        `box=0:x=(w-text_w)/2:y=h*0.78-text_h/2`,
+        "-q:v", "2",
+        out,
+      ],
       { timeoutMs: 30_000 },
     );
     try { unlinkSync(tmpOut); } catch { /* ignore */ }
     if (res.code !== 0) {
-      logger.warn({ err: res.stderr.slice(-200) }, "Thumbnail text overlay failed; using raw frame");
+      logger.warn({ err: res.stderr.slice(-200) }, "Thumbnail card failed; using raw frame");
       try { renameSync(tmpOut, out); } catch { /* ignore */ }
     }
     return out;

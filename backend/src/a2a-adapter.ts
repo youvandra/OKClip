@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import type { AspectRatio, Brief, Delivery, Platform } from "./types.js";
 
 /**
@@ -104,10 +103,15 @@ export function buildDeliverySummary(delivery: Delivery): string {
   delivery.clips.forEach((c, i) => {
     const range = `${fmt(c.timestamp.startSec)}-${fmt(c.timestamp.endSec)}`;
     lines.push(
-      `${i + 1}. [${range}] viral ${c.viralScore}/95 · ${c.durationSec}s · file: ${basename(c.downloadUrl)}`,
+      `${i + 1}. [${range}] viral ${c.viralScore}/95 | ${c.durationSec}s | ${c.hashtags?.join(" ") ?? ""}`,
     );
     if (c.caption) lines.push(`   ${c.caption}`);
     if (c.reasons.length) lines.push(`   why: ${c.reasons.join("; ")}`);
   });
+  lines.push(
+    "",
+    "Each clip includes: burned-in subtitles, thumbnail, download link.",
+    `Expected processing time: ${delivery.estimatedSec ?? "60-180"} seconds.`,
+  );
   return lines.join("\n");
 }

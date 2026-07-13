@@ -16,3 +16,4 @@ docs/
 # Downloaded clip files (testing)
 clip-*.mp4
 clip-*.jpg
+test-clip/

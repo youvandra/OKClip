@@ -178,6 +178,7 @@ export interface Delivery {
   clips: ClipResult[];
   runnerUps: RunnerUpMoment[];
   message: string;
+  estimatedSec?: number;
 }
 
 /** A per-clip rejection during the revision loop. */
