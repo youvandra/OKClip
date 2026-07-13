@@ -7,7 +7,7 @@ import { download } from "./downloader.js";
 import { detectScenesNear, refineStart } from "./hooks.js";
 import { logger } from "./logger.js";
 import { buildAss } from "./subtitles.js";
-import { thumbnail } from "./thumbnail.js";
+import { smartThumbnail } from "./thumbnail.js";
 import { transcribe } from "./transcriber.js";
 import type {
   ClipEvidence,
@@ -129,12 +129,11 @@ export async function produceClip(params: {
   });
 
   const thumbFile = `${base}.jpg`;
-  // Sample at 25% of the clip — closer to the hook than the midpoint.
-  const thumbSec = startSec + (moment.endSec - startSec) * 0.25;
-  await thumbnail({
+  await smartThumbnail({
     input: sourcePath,
     output: join(workDir, thumbFile),
-    atSec: thumbSec,
+    startSec,
+    endSec: moment.endSec,
   });
 
   return toClipResult(
