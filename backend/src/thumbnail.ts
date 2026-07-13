@@ -102,15 +102,12 @@ export async function smartThumbnail(spec: ClipThumbnailSpec): Promise<string> {
       .slice(0, 2);
 
     const drawtexts = lines.map((line, i) => {
-      const clean = line
-        .replace(/\\/g, "\\\\")
-        .replace(/:/g, "\\:")
-        .replace(/'/g, "'\\\\\\''")
-        .trim();
+      const clean = line.replace(/\\/g, "\\\\").replace(/:/g, "\\:").trim();
       const y = i === 0 ? "h-th*2-60" : "h-th-20";
       const fontSize = i === 0 ? 42 : 30;
-      const alpha = i === 0 ? "@0.95" : "@0.8";
-      return `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fallback_font=1:text='${clean}':fontsize=${fontSize}:fontcolor=white${alpha}:box=1:boxcolor=black@0.55:boxborderw=16:x=(w-text_w)/2:y=${y}`;
+      const alpha = i === 0 ? "@0.95:borderw=20" : "@0.8:borderw=12";
+      const font = "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+      return `drawtext=${font}:fontsize=${fontSize}:fontcolor=white@0.95:box=1:boxcolor=black@0.55:boxborderw=16:x=(w-text_w)/2:y=${y}:text='${clean}'`;
     });
 
     const res = await run(
