@@ -10,7 +10,7 @@
 export type AspectRatio = "16:9" | "9:16" | "1:1";
 
 /** Download resolution cap — 360, 720, 1080, or 2160.  Defaults to 720. */
-export type Resolution = 360 | 720 | 1080 | 2160;
+export type Resolution = 360 | 480 | 720 | 1080 | 2160;
 
 /** Subtitle visual style preset. */
 export type SubtitleStyle = "default" | "bold" | "karaoke" | "minimal";

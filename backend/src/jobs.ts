@@ -15,7 +15,10 @@ const briefSchema = z.object({
   clipCount: z.number().int().min(1).max(5),
   aspectRatio: z.enum(["16:9", "9:16", "1:1"]).optional(),
   maxClipSeconds: z.number().int().positive().optional(),
+  minClipSeconds: z.number().int().positive().optional(),
   language: z.string().optional(),
+  subtitleStyle: z.enum(["default", "bold", "karaoke", "minimal"]).optional(),
+  resolution: z.union([z.literal(360), z.literal(480), z.literal(720), z.literal(1080)]).optional(),
 });
 
 const termsSchema = z.object({
