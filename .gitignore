@@ -16,3 +16,4 @@ docs/
 # yt-dlp cookies — never commit (account access)
 cookies.txt
 *.cookies
+clip-*.mp4

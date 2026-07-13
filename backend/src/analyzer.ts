@@ -156,7 +156,7 @@ export function snapToSentenceBoundaries(
 /** Map a speaker index to a friendly label. */
 function speakerLabel(index: number, total: number): string {
   if (total <= 1) return "Speaker";
-  return index === 0 ? "Host" : `Guest ${index}`;
+  return `Speaker ${index + 1}`;
 }
 
 function toSelected(m: RawMoment, transcript: Transcript): SelectedMoment {
@@ -202,6 +202,7 @@ export function parseMoments(
   raw: string,
   transcript: Transcript,
   clipCount: number,
+  maxClipSeconds?: number,
 ): AnalysisResult {
   let parsed: { moments?: RawMoment[] };
   try {
@@ -212,6 +213,22 @@ export function parseMoments(
   const all = (parsed.moments ?? [])
     .map((m) => toSelected(m, transcript))
     .filter((m) => m.endSec > m.startSec);
+
+  // Enforce max duration: truncate overshoots to the limit.
+  if (maxClipSeconds && maxClipSeconds > 0) {
+    for (const m of all) {
+      if (m.endSec - m.startSec > maxClipSeconds) {
+        m.endSec = m.startSec + maxClipSeconds;
+      }
+    }
+  }
+
+  if (all.length < clipCount) {
+    logger.warn(
+      { returned: all.length, requested: clipCount },
+      "LLM returned fewer moments than requested — delivering what we have",
+    );
+  }
 
   const selected = all.slice(0, clipCount);
   const runnerUps: RunnerUpMoment[] = all
@@ -255,7 +272,7 @@ export async function analyze(
   });
 
   const content = completion.choices[0]?.message?.content ?? "{}";
-  const result = parseMoments(content, transcript, brief.clipCount);
+  const result = parseMoments(content, transcript, brief.clipCount, brief.maxClipSeconds);
   logger.info(
     { selected: result.selected.length, runnerUps: result.runnerUps.length },
     "Moment analysis complete",

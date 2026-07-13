@@ -71,7 +71,7 @@ test("parseMoments clamps score, snaps, and drops invalid", () => {
   assert.equal(m.viralScore, MAX_VIRAL_SCORE); // clamped from 150
   assert.equal(m.confidence, 1); // clamped from 2
   assert.equal(m.transcriptSnippet, "This is DeFi.");
-  assert.deepEqual(m.speakers, ["Host"]);
+  assert.deepEqual(m.speakers, ["Speaker 1"]);
 });
 
 test("parseMoments splits selected and runner-ups by clipCount", () => {

@@ -8,6 +8,7 @@ export interface ClipSpec {
   startSec: number;
   endSec: number;
   aspectRatio: AspectRatio;
+  sourceAspect?: AspectRatio;
   /** Subtitle filename to burn in (relative to `cwd`), optional. */
   subtitleFile?: string;
   /** Working directory (so subtitle paths stay simple). */
@@ -16,15 +17,21 @@ export interface ClipSpec {
 
 /**
  * Center-crop filter for a target aspect ratio. 16:9 assumes a landscape
- * source and needs no crop. (Face/subject-aware cropping is a Stage 3 upgrade —
+ * source and needs no crop. Returns null for source-aspect matches.
+ * (Face/subject-aware cropping is a Stage 3 upgrade —
  * see PLAN; naive center-crop can clip a speaker off-frame.)
  */
-export function aspectFilter(aspect: AspectRatio): string | null {
+export function aspectFilter(aspect: AspectRatio, sourceAspect?: AspectRatio): string | null {
+  if (sourceAspect && aspect === sourceAspect) return null;
+  const w = "iw";
+  const h = "ih";
   switch (aspect) {
     case "9:16":
-      return "crop=ih*9/16:ih:(iw-ih*9/16)/2:0";
+      if (sourceAspect === "9:16") return null;
+      return `crop=${h}*9/16:${h}:(${w}-${h}*9/16)/2:0`;
     case "1:1":
-      return "crop=ih:ih:(iw-ih)/2:0";
+      if (sourceAspect === "1:1") return null;
+      return `crop=${h}:${h}:(${w}-${h})/2:0`;
     case "16:9":
       return null;
   }
@@ -32,29 +39,42 @@ export function aspectFilter(aspect: AspectRatio): string | null {
 
 /** Build the ffmpeg argument vector for cutting one clip. Pure/testable. */
 export function buildClipArgs(spec: ClipSpec): string[] {
-  const duration = Math.max(0, spec.endSec - spec.startSec);
+  const duration = Math.max(0.5, spec.endSec - spec.startSec);
+  // Output seeking (-ss after -i) for frame-accurate cuts at the cost of
+  // having to decode from the previous keyframe. Short clips make this cheap.
   const args = [
     "-y",
-    "-ss",
-    spec.startSec.toFixed(3),
     "-i",
     spec.input,
+    "-ss",
+    spec.startSec.toFixed(3),
     "-t",
     duration.toFixed(3),
   ];
-  // Chain crop and subtitle-burn filters when both apply.
   const filters: string[] = [];
-  const crop = aspectFilter(spec.aspectRatio);
+  const crop = aspectFilter(spec.aspectRatio, spec.sourceAspect);
   if (crop) filters.push(crop);
-  if (spec.subtitleFile) filters.push(`subtitles=${spec.subtitleFile}`);
+  if (spec.subtitleFile) {
+    // `original_size=1` tells libass to respect the PlayRes from the ASS
+    // header, keeping font sizes and margins consistent on every video.
+    filters.push(`subtitles='${spec.subtitleFile}':original_size=1`);
+  }
   if (filters.length > 0) args.push("-vf", filters.join(","));
   args.push(
     "-c:v",
     "libx264",
     "-preset",
-    "veryfast",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
     "-c:a",
     "aac",
+    "-b:a",
+    "192k",
+    "-af",
+    "loudnorm=I=-16:TP=-1.5:LRA=11",
     "-movflags",
     "+faststart",
     spec.output,

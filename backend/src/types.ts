@@ -9,6 +9,9 @@
 /** Aspect ratio of the output clips. */
 export type AspectRatio = "16:9" | "9:16" | "1:1";
 
+/** Download resolution cap — 360, 720, 1080, or 2160.  Defaults to 720. */
+export type Resolution = 360 | 720 | 1080 | 2160;
+
 /** A natural-language clip request from a user's agent. */
 export interface Brief {
   /** Source video (YouTube URL for v1). */
@@ -19,8 +22,15 @@ export interface Brief {
   clipCount: number;
   /** Optional explicit preferences; anything omitted may be negotiated. */
   aspectRatio?: AspectRatio;
+  /** Hard cap on clip duration in seconds. Enforced after LLM selection. */
   maxClipSeconds?: number;
+  /** Clips shorter than this are rejected. Defaults to 3s. */
+  minClipSeconds?: number;
   language?: string;
+  /** Maximum video height to download. Defaults to 720. */
+  resolution?: Resolution;
+  /** Attempt to infer the source aspect for smarter cropping. */
+  sourceAspect?: AspectRatio;
 }
 
 /** Terms agreed during negotiation, before escrow is funded. */

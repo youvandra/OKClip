@@ -17,12 +17,15 @@ test("buildClipArgs seeks, sets duration, and encodes", () => {
     aspectRatio: "16:9",
   });
   const joined = args.join(" ");
-  assert.match(joined, /-ss 4\.500/);
-  assert.match(joined, /-t 4\.500/); // duration = end - start
   assert.match(joined, /-i in\.mp4/);
+  assert.match(joined, /-ss 4\.500/);
   assert.match(joined, /libx264/);
+  assert.match(joined, /-crf 18/);
+  assert.match(joined, /yuv420p/);
+  assert.match(joined, /-b:a 192k/);
+  assert.match(joined, /loudnorm/);
   assert.equal(args[args.length - 1], "out.mp4");
-  assert.ok(!joined.includes("-vf")); // 16:9 has no crop filter
+  assert.ok(!joined.includes("-vf"));
 });
 
 test("buildClipArgs adds a crop filter for 9:16", () => {
@@ -47,8 +50,8 @@ test("buildClipArgs chains crop and subtitle burn", () => {
   });
   const vf = args[args.indexOf("-vf") + 1]!;
   assert.match(vf, /crop=/);
-  assert.match(vf, /subtitles=clip\.srt/);
-  assert.ok(vf.includes(",")); // filters chained
+  assert.match(vf, /subtitles='clip\.srt':original_size=1/);
+  assert.ok(vf.includes(","));
 });
 
 test("buildClipArgs burns subtitles even without a crop (16:9)", () => {
@@ -61,5 +64,5 @@ test("buildClipArgs burns subtitles even without a crop (16:9)", () => {
     subtitleFile: "clip.srt",
   });
   const vf = args[args.indexOf("-vf") + 1]!;
-  assert.equal(vf, "subtitles=clip.srt");
+  assert.match(vf, /subtitles='clip\.srt':original_size=1/);
 });

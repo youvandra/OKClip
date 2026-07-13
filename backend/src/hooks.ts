@@ -49,6 +49,49 @@ export async function detectScenes(
     ],
     { timeoutMs: 5 * 60_000 },
   );
-  // ffmpeg writes showinfo to stderr regardless of exit code.
+  if (res.code !== 0 && res.stderr.trim().length === 0) {
+    throw new Error(`ffmpeg scene detection failed (${res.code}): ${res.stderr.slice(-300)}`);
+  }
   return parseSceneTimes(res.stderr);
+}
+
+/**
+ * Detect scene cuts near the given candidate timestamps instead of scanning the
+ * whole video. Much faster for long sources.
+ */
+export async function detectScenesNear(
+  input: string,
+  candidates: number[],
+  windowSec = 4,
+  threshold = 0.4,
+): Promise<number[]> {
+  if (candidates.length === 0) return [];
+  const times = new Set<number>();
+  for (const t of candidates) {
+    const start = Math.max(0, t - windowSec);
+    const end = t + 0.5; // small overscan past the candidate
+    try {
+      const res = await run(
+        "ffmpeg",
+        [
+          "-y",
+          "-ss", start.toFixed(3),
+          "-i", input,
+          "-t", (end - start).toFixed(3),
+          "-filter:v", `select='gt(scene,${threshold})',showinfo`,
+          "-f", "null",
+          "-",
+        ],
+        { timeoutMs: 2 * 60_000 },
+      );
+      if (res.stderr.trim()) {
+        for (const ts of parseSceneTimes(res.stderr)) {
+          times.add(Math.round((start + ts) * 1000) / 1000);
+        }
+      }
+    } catch {
+      // Skip failed probes — worst case we miss a scene cut.
+    }
+  }
+  return [...times].sort((a, b) => a - b);
 }

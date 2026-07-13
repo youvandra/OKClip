@@ -4,7 +4,7 @@ import { analyze, segmentTranscript } from "./analyzer.js";
 import { clip } from "./clipper.js";
 import { config } from "./config.js";
 import { download } from "./downloader.js";
-import { detectScenes, refineStart } from "./hooks.js";
+import { detectScenesNear, refineStart } from "./hooks.js";
 import { logger } from "./logger.js";
 import { buildAss } from "./subtitles.js";
 import { thumbnail } from "./thumbnail.js";
@@ -71,6 +71,7 @@ export async function produceClip(params: {
   index: number;
   suffix: string;
   aspectRatio: ClipJob["terms"]["aspectRatio"];
+  sourceAspect?: ClipJob["brief"]["sourceAspect"];
   scenes: number[];
 }): Promise<ClipResult> {
   const { jobId, sourcePath, workDir, transcript, moment, index, suffix } =
@@ -97,6 +98,7 @@ export async function produceClip(params: {
     startSec,
     endSec: moment.endSec,
     aspectRatio: params.aspectRatio,
+    sourceAspect: params.sourceAspect,
     subtitleFile: subFile,
     cwd: workDir,
   });
@@ -128,7 +130,11 @@ export async function runPipeline(
   await mkdir(workDir, { recursive: true });
 
   hooks.setStatus("downloading");
-  const videoPath = await download(job.brief.url, workDir);
+  const videoPath = await download(
+    job.brief.url,
+    workDir,
+    job.brief.resolution ?? 720,
+  );
   hooks.setStatus("downloading", { sourcePath: videoPath });
 
   hooks.setStatus("transcribing");
@@ -146,28 +152,42 @@ export async function runPipeline(
     throw new Error("No suitable moments found for the brief");
   }
 
+  const minClip = job.brief.minClipSeconds ?? 3;
+  const valid = moments.filter(
+    (m) => m.endSec - m.startSec >= minClip,
+  );
+  if (valid.length === 0) {
+    throw new Error(
+      `All ${moments.length} moments are shorter than the ${minClip}s minimum`,
+    );
+  }
+
   hooks.setStatus("clipping", { runnerUps });
 
-  // Scene cuts refine clip starts for a stronger hook; degrade gracefully.
+  // Scan scene cuts only near candidate start times — far faster than full-video scan.
   let scenes: number[] = [];
   try {
-    scenes = await detectScenes(videoPath);
+    scenes = await detectScenesNear(
+      videoPath,
+      valid.map((m) => m.startSec),
+    );
   } catch (err) {
     logger.warn({ jobId: job.id, err }, "Scene detection failed; skipping");
   }
 
   const results: ClipResult[] = [];
-  for (let i = 0; i < moments.length; i++) {
+  for (let i = 0; i < valid.length; i++) {
     results.push(
       await produceClip({
         jobId: job.id,
         sourcePath: videoPath,
         workDir,
         transcript,
-        moment: moments[i]!,
+        moment: valid[i]!,
         index: i,
         suffix: "",
         aspectRatio: job.terms.aspectRatio,
+        sourceAspect: job.brief.sourceAspect,
         scenes,
       }),
     );

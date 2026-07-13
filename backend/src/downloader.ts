@@ -123,17 +123,21 @@ export async function probe(url: string): Promise<VideoMeta> {
 }
 
 /**
- * Download a video at up to 720p as mp4 into `destDir`. Returns the file path.
- * yt-dlp picks the best mp4 <=720p and merges audio.
+ * Download a video into `destDir`. Returns the file path.
+ * `maxHeight` caps the resolution (360/720/1080), defaulting to 720.
  */
-export async function download(url: string, destDir: string): Promise<string> {
+export async function download(
+  url: string,
+  destDir: string,
+  maxHeight = 720,
+): Promise<string> {
   const out = join(destDir, "%(id)s.%(ext)s");
   const res = await run(
     "yt-dlp",
     [
       ...ytdlpBase(),
       "-f",
-      "bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]/b",
+      `bv*[height<=${maxHeight}][ext=mp4]+ba[ext=m4a]/b[height<=${maxHeight}]/b`,
       "--merge-output-format",
       "mp4",
       "--no-playlist",
@@ -143,8 +147,6 @@ export async function download(url: string, destDir: string): Promise<string> {
       "after_move:filepath",
       url,
     ],
-    // Residential proxies are slow (~100 KiB/s), and OKClip's real inputs are
-    // long-form (podcasts/talks), so allow a generous download window.
     { timeoutMs: 30 * 60_000 },
   );
   if (res.code !== 0) {
@@ -152,6 +154,6 @@ export async function download(url: string, destDir: string): Promise<string> {
   }
   const path = res.stdout.trim().split("\n").pop() ?? "";
   if (!path) throw new DownloadError("yt-dlp produced no file", "unknown");
-  logger.info({ url, path }, "Video downloaded");
+  logger.info({ url, path, maxHeight }, "Video downloaded");
   return path;
 }

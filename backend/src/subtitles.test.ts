@@ -18,13 +18,13 @@ const words: TranscriptWord[] = [
 test("buildSrt makes relative-timed cues with speaker labels", () => {
   const srt = buildSrt(words, 10, 12, 2);
   assert.match(srt, /00:00:00,000 --> /); // relative to clip start
-  assert.match(srt, /Host: Hello there\./);
-  assert.match(srt, /Guest 1: Yes\?/);
+  assert.match(srt, /Speaker 1: Hello there\./);
+  assert.match(srt, /Speaker 2: Yes\?/);
 });
 
 test("buildSrt omits speaker labels for single-speaker audio", () => {
   const srt = buildSrt(words, 10, 12, 1);
-  assert.ok(!srt.includes("Host:"));
+  assert.ok(!srt.includes("Speaker 1:"));
 });
 
 test("assTime formats h:mm:ss.cs", () => {
@@ -38,8 +38,8 @@ test("buildAss emits a styled header and dialogue with relative times", () => {
   assert.match(ass, /PlayResX: 1080/); // 9:16 canvas
   assert.match(ass, /Style: Default,DejaVu Sans/);
   assert.match(ass, /Dialogue: 0,0:00:00\.00,/); // relative to clip start
-  assert.match(ass, /Host: Hello there\./);
-  assert.match(ass, /Guest 1: Yes\?/);
+  assert.match(ass, /Speaker 1: Hello there\./);
+  assert.match(ass, /Speaker 2: Yes\?/);
 });
 
 test("buildAss sizes the canvas per aspect ratio", () => {

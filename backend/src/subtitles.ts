@@ -32,13 +32,13 @@ interface Cue {
 }
 
 const SENTENCE_END = /[.!?]$/;
-const MAX_WORDS = 6;
-const MAX_CUE_SEC = 2.8;
+const MAX_WORDS = 10;
+const MAX_CUE_SEC = 4;
 
 /** Map a speaker index to a label used as a caption prefix. */
 function label(speaker: number | undefined, total: number): string {
   if (speaker === undefined || total <= 1) return "";
-  return speaker === 0 ? "Host: " : `Guest ${speaker}: `;
+  return `Speaker ${speaker + 1}: `;
 }
 
 /**
@@ -59,9 +59,11 @@ export function groupCues(
     if (bucket.length === 0) return;
     const first = bucket[0]!;
     const last = bucket[bucket.length - 1]!;
+    // Clamp to 0 — after scene-refined clip starts, the first words may
+    // have already started before the clip boundary.
     cues.push({
-      start: first.start - startSec,
-      end: last.end - startSec,
+      start: Math.max(0, first.start - startSec),
+      end: Math.max(0.05, last.end - startSec),
       speaker: first.speaker,
       text: bucket.map((w) => w.word).join(" "),
     });
@@ -119,7 +121,7 @@ function styleFor(aspect: AspectRatio): AssStyle {
 
 /** Escape a caption for an ASS Dialogue line. */
 function assText(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/\r?\n/g, " ").replace(/\{/g, "(").replace(/\}/g, ")");
+  return s.replace(/\\/g, "\\\\").replace(/\r?\n/g, " ");
 }
 
 /**
