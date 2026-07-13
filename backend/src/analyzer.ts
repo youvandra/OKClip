@@ -81,11 +81,18 @@ export function buildAnalysisPrompt(
     `viralScore is 0-${MAX_VIRAL_SCORE} (a heuristic, never certainty).`,
     "confidence (0-1) is how well the moment matches the user's brief.",
     "reasons must cite concrete signals (topic match, question->answer, emotional beat, hook), not fluff.",
+    "If translation is requested, translate captions and hashtags accurately to the target language.",
   ].join(" ");
+
+  const targetLang = brief.language ?? transcript.language;
+  const needsTranslation = brief.language && brief.language !== transcript.language;
+  const langInstruction = needsTranslation
+    ? `IMPORTANT: The transcript is in ${transcript.language}. Translate captions and hashtags to ${targetLang}.`
+    : `Write caption and hashtags in ${targetLang}.`;
 
   const user = [
     `Brief: "${brief.prompt}"`,
-    `Transcript language: ${transcript.language} — write caption and hashtags in this language.`,
+    langInstruction,
     `Clips wanted: ${brief.clipCount} (also include up to 3 extra strong candidates as runner-ups, ordered best-first)`,
     `Max clip length: ${brief.maxClipSeconds ?? 60}s`,
     "",
