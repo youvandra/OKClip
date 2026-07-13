@@ -9,6 +9,7 @@ module.exports = {
       instances: 1,
       autorestart: true,
       max_restarts: 10,
+      exec_mode: "fork",
       // PORT and secrets come from backend/.env (loaded via dotenv), so the
       // port can differ per host without editing this file.
       env: {
@@ -25,6 +26,7 @@ module.exports = {
       instances: 1,
       autorestart: true,
       max_restarts: 10,
+      exec_mode: "fork",
       env: {
         NODE_ENV: "production",
         ONCHAINOS_BIN: "/home/ubuntu/.local/bin/onchainos",
