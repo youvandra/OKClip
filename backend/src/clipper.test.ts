@@ -17,8 +17,8 @@ test("buildClipArgs seeks, sets duration, and encodes", () => {
     aspectRatio: "16:9",
   });
   const joined = args.join(" ");
-  assert.match(joined, /-i in\.mp4/);
   assert.match(joined, /-ss 4\.500/);
+  assert.match(joined, /-i in\.mp4/);
   assert.match(joined, /libx264/);
   assert.match(joined, /-crf 18/);
   assert.match(joined, /yuv420p/);

@@ -38,10 +38,10 @@ export function buildClipArgs(spec: ClipSpec): string[] {
   // having to decode from the previous keyframe. Short clips make this cheap.
   const args = [
     "-y",
-    "-i",
-    spec.input,
     "-ss",
     spec.startSec.toFixed(3),
+    "-i",
+    spec.input,
     "-t",
     duration.toFixed(3),
   ];
